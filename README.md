@@ -9,7 +9,7 @@ InsightPilot is an intelligent, AI-powered solution that lets you explore and an
 skinparam componentStyle rectangle
 
 package "InsightPilot Desktop App" {
-  [UI Shell (PyQt/PySide)] --> [Client API Layer]
+  [UI Shell (PySide)] --> [Client API Layer]
   [Client API Layer] --> [Local DB History Store]
   [Client API Layer] --> [LLM Client]
 
@@ -41,7 +41,7 @@ package "DB Adapter Layer" {
 
 | Component | Tech Stack / Tool |
 |-----------|------------------|
-| UI Framework | PyQt / PySide |
+| UI Framework |   PySide |
 | Charting Library | Matplotlib |
 | Backend (App Logic) | Python |
 | LLM Engine | Ollama with Mistral 7B model |
@@ -99,7 +99,7 @@ Each adapter:
 ## 📊 Visualization Layer
 
 * Embedded **chart rendering** using:
-  * `Matplotlib` (inside PyQt/PySide UI)
+  * `Matplotlib` (inside  PySide UI)
   * Supports: `bar`, `line`, `pie`, `scatter`, `table`
 * Data type ↔ chart mapping inferred:
   * Time series → line chart
@@ -116,7 +116,7 @@ Each adapter:
 
 ## 🧱 Implementation Steps
 
-### 1. 🧩 Desktop App with PyQt/PySide
+### 1. 🧩 Desktop App with  PySide
 Build a multi-tabbed PyQt app with panels for:
 - **Connection Config** (DB management)
 - **Chat Interface** (question input and LLM response)
