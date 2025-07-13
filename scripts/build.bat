@@ -51,7 +51,7 @@ if errorlevel 1 (
 
 REM Build executable with PyInstaller
 echo Building executable!
-pyinstaller --onefile --windowed --name InsightPilot --icon=assets/icon.ico src/main.py
+pyinstaller InsightPilot.spec
 
 REM Copy assets to dist folder
 if exist "assets" (

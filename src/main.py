@@ -3,10 +3,21 @@ Main entry point for InsightPilot application
 """
 
 import sys
+import os
 import argparse
 import logging
 from pathlib import Path
 from PySide6.QtWidgets import QApplication
+
+# Add the src directory to Python path to enable absolute imports
+if getattr(sys, 'frozen', False):
+    # Running as PyInstaller bundle
+    application_path = sys._MEIPASS
+else:
+    # Running as script
+    application_path = os.path.dirname(os.path.abspath(__file__))
+
+sys.path.insert(0, application_path)
 
 from ui.main_window import MainWindow
 from api.server_api import run_server
