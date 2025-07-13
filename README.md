@@ -36,7 +36,7 @@ package "DB Adapter Layer" {
 [MongoDB Adapter] --> [MongoDB Instance]
 @enduml
 ```
-
+![alt text](arch.png)
 ## 🛠️ Tech Stack
 
 | Component | Tech Stack / Tool |

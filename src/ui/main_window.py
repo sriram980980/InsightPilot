@@ -1,0 +1,223 @@
+"""
+Main window for InsightPilot application
+"""
+
+import logging
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+    QTabWidget, QMenuBar, QStatusBar, QSplitter,
+    QMessageBox, QApplication
+)
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QAction, QIcon
+
+from config.config_manager import ConfigManager
+
+
+class MainWindow(QMainWindow):
+    """Main application window"""
+    
+    def __init__(self, config_manager: ConfigManager, client_mode: bool = False):
+        super().__init__()
+        self.config_manager = config_manager
+        self.client_mode = client_mode
+        self.logger = logging.getLogger(__name__)
+        
+        self.setWindowTitle("InsightPilot - AI-Powered Data Explorer")
+        self.setGeometry(100, 100, 1200, 800)
+        
+        self.setup_ui()
+        self.setup_menu()
+        self.setup_status_bar()
+        
+        # Load UI settings
+        self.load_ui_settings()
+        
+        self.logger.info(f"Main window initialized (client_mode: {client_mode})")
+    
+    def setup_ui(self):
+        """Set up the main UI components"""
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        layout = QVBoxLayout(central_widget)
+        
+        # Create main splitter
+        splitter = QSplitter(Qt.Horizontal)
+        layout.addWidget(splitter)
+        
+        # Create tab widget for main content
+        self.tab_widget = QTabWidget()
+        splitter.addWidget(self.tab_widget)
+        
+        # Add placeholder tabs (these would be implemented with actual panels)
+        self.add_placeholder_tabs()
+        
+        # Set splitter proportions
+        splitter.setSizes([200, 1000])
+    
+    def add_placeholder_tabs(self):
+        """Add placeholder tabs for MVP demonstration"""
+        # Connection Config Tab
+        config_widget = QWidget()
+        config_layout = QVBoxLayout(config_widget)
+        config_layout.addWidget(self.create_placeholder_label("Database Connection Configuration"))
+        self.tab_widget.addTab(config_widget, "Connections")
+        
+        # Chat Interface Tab
+        chat_widget = QWidget()
+        chat_layout = QVBoxLayout(chat_widget)
+        chat_layout.addWidget(self.create_placeholder_label("Natural Language Query Interface"))
+        self.tab_widget.addTab(chat_widget, "Query Chat")
+        
+        # Results Tab
+        results_widget = QWidget()
+        results_layout = QVBoxLayout(results_widget)
+        results_layout.addWidget(self.create_placeholder_label("Query Results and Visualizations"))
+        self.tab_widget.addTab(results_widget, "Results")
+        
+        # History Tab
+        history_widget = QWidget()
+        history_layout = QVBoxLayout(history_widget)
+        history_layout.addWidget(self.create_placeholder_label("Query History and Favorites"))
+        self.tab_widget.addTab(history_widget, "History")
+    
+    def create_placeholder_label(self, text: str):
+        """Create a placeholder label for MVP"""
+        from PySide6.QtWidgets import QLabel
+        label = QLabel(f"[PLACEHOLDER]\n\n{text}\n\nThis panel will be implemented in the full version.")
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet("""
+            QLabel {
+                background-color: #f0f0f0;
+                border: 2px dashed #cccccc;
+                border-radius: 10px;
+                padding: 20px;
+                font-size: 16px;
+                color: #666666;
+            }
+        """)
+        return label
+    
+    def setup_menu(self):
+        """Set up the application menu"""
+        menubar = self.menuBar()
+        
+        # File menu
+        file_menu = menubar.addMenu("&File")
+        
+        new_action = QAction("&New Connection", self)
+        new_action.setShortcut("Ctrl+N")
+        new_action.triggered.connect(self.new_connection)
+        file_menu.addAction(new_action)
+        
+        file_menu.addSeparator()
+        
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
+        # Tools menu
+        tools_menu = menubar.addMenu("&Tools")
+        
+        settings_action = QAction("&Settings", self)
+        settings_action.triggered.connect(self.show_settings)
+        tools_menu.addAction(settings_action)
+        
+        # Help menu
+        help_menu = menubar.addMenu("&Help")
+        
+        about_action = QAction("&About", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+    
+    def setup_status_bar(self):
+        """Set up the status bar"""
+        self.status_bar = self.statusBar()
+        
+        mode_text = "Client Mode" if self.client_mode else "Standalone Mode"
+        self.status_bar.showMessage(f"Ready - {mode_text}")
+    
+    def load_ui_settings(self):
+        """Load UI settings from configuration"""
+        ui_settings = self.config_manager.get_ui_settings()
+        
+        # Apply theme
+        theme = ui_settings.get("theme", "light")
+        self.apply_theme(theme)
+        
+        # Apply font size
+        font_size = ui_settings.get("font_size", 12)
+        self.apply_font_size(font_size)
+    
+    def apply_theme(self, theme: str):
+        """Apply UI theme"""
+        if theme == "dark":
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #2b2b2b;
+                    color: #ffffff;
+                }
+                QTabWidget::pane {
+                    border: 1px solid #555555;
+                    background-color: #3c3c3c;
+                }
+                QTabBar::tab {
+                    background-color: #2b2b2b;
+                    color: #ffffff;
+                    padding: 8px 16px;
+                    border: 1px solid #555555;
+                }
+                QTabBar::tab:selected {
+                    background-color: #3c3c3c;
+                }
+            """)
+        else:
+            self.setStyleSheet("")  # Default light theme
+    
+    def apply_font_size(self, font_size: int):
+        """Apply font size to application"""
+        font = self.font()
+        font.setPointSize(font_size)
+        self.setFont(font)
+    
+    def new_connection(self):
+        """Handle new connection action"""
+        QMessageBox.information(
+            self, 
+            "New Connection", 
+            "New connection dialog would open here.\n\nThis will be implemented in the full version."
+        )
+    
+    def show_settings(self):
+        """Show settings dialog"""
+        QMessageBox.information(
+            self, 
+            "Settings", 
+            "Settings dialog would open here.\n\nThis will be implemented in the full version."
+        )
+    
+    def show_about(self):
+        """Show about dialog"""
+        QMessageBox.about(
+            self, 
+            "About InsightPilot", 
+            """
+            <h3>InsightPilot v1.0.0</h3>
+            <p>AI-powered desktop application for data exploration and analysis</p>
+            <p>Built with PySide6, Python, and Ollama</p>
+            <p><b>Features:</b></p>
+            <ul>
+                <li>Natural language to SQL conversion</li>
+                <li>Multiple database support (MySQL, Oracle, MongoDB)</li>
+                <li>Intelligent data visualization</li>
+                <li>Secure configuration management</li>
+            </ul>
+            """
+        )
+    
+    def closeEvent(self, event):
+        """Handle window close event"""
+        self.logger.info("Application closing")
+        event.accept()
