@@ -133,3 +133,90 @@ class ConfigManager:
         
         return connections
     
+    def get_config(self) -> Dict[str, Any]:
+        """Get the complete configuration"""
+        return self._config.copy()
+    
+    def add_database_connection(self, name: str, connection: DBConnection) -> None:
+        """Add a new database connection"""
+        if "database_connections" not in self._config:
+            self._config["database_connections"] = {}
+        
+        self._config["database_connections"][name] = {
+            "host": connection.host,
+            "port": connection.port,
+            "database": connection.database,
+            "username": connection.username,
+            "password": connection.password,
+            "connection_params": connection.connection_params or {}
+        }
+        self._save_config()
+        self.logger.info(f"Added database connection: {name}")
+    
+    def remove_database_connection(self, name: str) -> bool:
+        """Remove a database connection"""
+        if name in self._config.get("database_connections", {}):
+            del self._config["database_connections"][name]
+            self._save_config()
+            self.logger.info(f"Removed database connection: {name}")
+            return True
+        return False
+    
+    def update_llm_settings(self, settings: Dict[str, Any]) -> None:
+        """Update LLM settings"""
+        if "llm_settings" not in self._config:
+            self._config["llm_settings"] = {}
+        
+        self._config["llm_settings"].update(settings)
+        self._save_config()
+        self.logger.info("Updated LLM settings")
+    
+    def update_ui_settings(self, settings: Dict[str, Any]) -> None:
+        """Update UI settings"""
+        if "ui_settings" not in self._config:
+            self._config["ui_settings"] = {}
+        
+        self._config["ui_settings"].update(settings)
+        self._save_config()
+        self.logger.info("Updated UI settings")
+    
+    def update_security_settings(self, settings: Dict[str, Any]) -> None:
+        """Update security settings"""
+        if "security" not in self._config:
+            self._config["security"] = {}
+        
+        self._config["security"].update(settings)
+        self._save_config()
+        self.logger.info("Updated security settings")
+    
+    def update_export_settings(self, settings: Dict[str, Any]) -> None:
+        """Update export settings"""
+        if "export_settings" not in self._config:
+            self._config["export_settings"] = {}
+        
+        self._config["export_settings"].update(settings)
+        self._save_config()
+        self.logger.info("Updated export settings")
+    
+    def reset_config(self) -> None:
+        """Reset configuration to defaults"""
+        self._config = self._get_default_config()
+        self._save_config()
+        self.logger.info("Configuration reset to defaults")
+    
+    def get_llm_settings(self) -> Dict[str, Any]:
+        """Get LLM settings"""
+        return self._config.get("llm_settings", {})
+    
+    def get_ui_settings(self) -> Dict[str, Any]:
+        """Get UI settings"""
+        return self._config.get("ui_settings", {})
+    
+    def get_security_settings(self) -> Dict[str, Any]:
+        """Get security settings"""
+        return self._config.get("security", {})
+    
+    def get_export_settings(self) -> Dict[str, Any]:
+        """Get export settings"""
+        return self._config.get("export_settings", {})
+

@@ -43,7 +43,7 @@ class LLMClient:
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=5)
             return response.status_code == 200
-        except requests.RequestException as e:
+        except Exception as e:
             self.logger.error(f"Ollama health check failed: {e}")
             return False
     
@@ -69,3 +69,77 @@ class LLMClient:
         except requests.RequestException as e:
             self.logger.error(f"Failed to pull model {model_name}: {e}")
             return False
+    
+    def generate(self, prompt: str, **kwargs) -> LLMResponse:
+        """Generate text using the LLM"""
+        try:
+            # Merge default params with provided kwargs
+            params = {**self.default_params, **kwargs}
+            
+            payload = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": params.get("temperature", 0.1),
+                    "top_p": params.get("top_p", 0.9),
+                    "num_predict": params.get("max_tokens", 1000)
+                }
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                timeout=60
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            return LLMResponse(
+                content=data.get("response", ""),
+                success=True,
+                model=data.get("model"),
+                tokens_used=data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Failed to generate text: {e}")
+            return LLMResponse(
+                content="",
+                success=False,
+                error=str(e)
+            )
+    
+    def update_model(self, model_name: str) -> bool:
+        """Update the current model"""
+        # Check if model exists
+        models = self.list_models()
+        available_models = [model["name"] for model in models.get("models", [])]
+        
+        if model_name not in available_models:
+            self.logger.warning(f"Model {model_name} not found in available models")
+            return False
+        
+        self.model = model_name
+        self.logger.info(f"Updated model to {model_name}")
+        return True
+    
+    def update_parameters(self, **params) -> None:
+        """Update generation parameters"""
+        self.default_params.update(params)
+        self.logger.info(f"Updated parameters: {params}")
+    
+    def get_model_info(self, model_name: Optional[str] = None) -> Dict[str, Any]:
+        """Get information about a model"""
+        target_model = model_name or self.model
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/show",
+                json={"name": target_model},
+                timeout=10
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            self.logger.error(f"Failed to get model info for {target_model}: {e}")
+            return {}

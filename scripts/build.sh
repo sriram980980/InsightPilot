@@ -33,7 +33,7 @@ pip install -r requirements.txt
 
 # Install development dependencies
 echo "Installing development dependencies!"
-pip install -e ".[dev]"
+#pip install -e ".[dev]"
 
 # Run tests
 echo "Running tests!"

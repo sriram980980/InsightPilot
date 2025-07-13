@@ -204,7 +204,7 @@ class TestMongoAdapter:
     @mock.patch('adapters.mongo_adapter.MongoClient')
     def test_connect_success(self, mock_client):
         """Test successful MongoDB connection"""
-        mock_conn = mock.Mock()
+        mock_conn = mock.MagicMock()
         mock_client.return_value = mock_conn
         mock_conn.admin.command.return_value = True
         

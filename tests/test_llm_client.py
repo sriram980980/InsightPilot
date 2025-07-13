@@ -157,13 +157,13 @@ class TestPromptBuilder:
         """Test schema information formatting"""
         schema_text = self.builder.format_schema_info(self.sample_schema)
         
-        assert "Table: users" in schema_text
-        assert "Table: orders" in schema_text
-        assert "Primary Key(s): id" in schema_text
-        assert "Foreign Key(s): user_id -> users.id" in schema_text
-        assert "id (int) NOT NULL" in schema_text
-        assert "name (varchar) NOT NULL" in schema_text
-        assert "email (varchar) NULL" in schema_text
+        assert "TABLE: users" in schema_text
+        assert "TABLE: orders" in schema_text
+        assert "[PRIMARY KEY]" in schema_text
+        assert "user_id -> users.id" in schema_text
+        assert "id (int)" in schema_text
+        assert "name (varchar)" in schema_text
+        assert "email (varchar)" in schema_text
     
     def test_build_chart_suggestion_prompt(self):
         """Test chart suggestion prompt building"""

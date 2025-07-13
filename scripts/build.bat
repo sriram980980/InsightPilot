@@ -1,5 +1,10 @@
 @echo off
-REM One-click build script for InsightPilot (Windows)
+REM One-click builREM Install dependencies
+echo Installing dependencies!
+pip install -r requirements.txt
+
+REM Development dependencies are already included in requirements.txt
+echo All dependencies installed!t for InsightPilot (Windows)
 
 echo Building InsightPilot!
 echo.
@@ -33,7 +38,7 @@ pip install -r requirements.txt
 
 REM Install development dependencies
 echo Installing development dependencies!
-pip install -r requirements.txt[dev]
+#pip install -r requirements.txt
 
 REM Run tests
 echo Running tests!

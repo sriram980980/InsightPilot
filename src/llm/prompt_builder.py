@@ -67,4 +67,88 @@ class PromptBuilder:
 
 ### EXPLANATION ###
 """
-        return prompt   
+        return prompt
+    
+    def format_schema_info(self, schemas: List[TableSchema]) -> str:
+        """Format schema information for prompts"""
+        schema_text = ""
+        
+        for schema in schemas:
+            schema_text += f"\n### TABLE: {schema.name} ###\n"
+            schema_text += "Columns:\n"
+            
+            for column in schema.columns:
+                schema_text += f"  - {column['name']} ({column['type']})"
+                if column['name'] in schema.primary_keys:
+                    schema_text += " [PRIMARY KEY]"
+                if not column.get('nullable', True):
+                    schema_text += " [NOT NULL]"
+                schema_text += "\n"
+            
+            if schema.foreign_keys:
+                schema_text += "Foreign Keys:\n"
+                for fk in schema.foreign_keys:
+                    schema_text += f"  - {fk['column']} -> {fk['references']}\n"
+            
+            schema_text += "\n"
+        
+        return schema_text
+    
+    def build_chart_suggestion_prompt(self, query_result: str, question: str) -> str:
+        """Build prompt for chart type suggestions"""
+        prompt = f"""You are an expert data visualization consultant. Given the query result data and the original question, suggest the most appropriate chart type and configuration.
+
+### ORIGINAL QUESTION ###
+{question}
+
+### QUERY RESULT STRUCTURE ###
+{query_result}
+
+### CHART SUGGESTION RULES ###
+1. Consider the data types (categorical, numerical, temporal)
+2. Consider the number of dimensions
+3. Consider the story the data should tell
+4. Suggest appropriate chart types: bar, line, pie, scatter, histogram, etc.
+5. Provide specific configuration recommendations
+
+### CHART RECOMMENDATION ###
+Chart Type: 
+Reasoning: 
+Configuration:
+"""
+        return prompt
+    
+    def build_error_explanation_prompt(self, query: str, error: str) -> str:
+        """Build prompt for explaining query errors"""
+        prompt = f"""You are an expert database troubleshooter. Given a query and its error message, provide a clear explanation of what went wrong and how to fix it.
+
+### QUERY ###
+{query}
+
+### ERROR MESSAGE ###
+{error}
+
+### ERROR ANALYSIS ###
+Problem: 
+Cause: 
+Solution: 
+"""
+        return prompt
+    
+    def build_optimization_prompt(self, query: str, execution_plan: str = "") -> str:
+        """Build prompt for query optimization suggestions"""
+        prompt = f"""You are an expert SQL performance optimizer. Given a query and optionally its execution plan, provide optimization suggestions.
+
+### QUERY ###
+{query}
+
+### EXECUTION PLAN ###
+{execution_plan if execution_plan else 'No execution plan provided'}
+
+### OPTIMIZATION SUGGESTIONS ###
+1. Performance Analysis:
+2. Bottlenecks Identified:
+3. Optimization Recommendations:
+4. Optimized Query (if applicable):
+"""
+        return prompt
