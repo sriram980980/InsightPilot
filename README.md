@@ -53,12 +53,12 @@ package "DB Adapter Layer" {
 
 * **Standalone Mode (default)**:
   * Starts LLM server locally (Ollama with Mistral 7B)
-  * Embeds driver + UI together
+  * Opens desktop UI with embedded driver + LLM together
 * **Client Mode**:
-  * UI-only app that connects to a known server node/cluster
+  * Opens desktop UI that connects to a remote server node/cluster
   * Uses TCP/WebSocket for communication
 * **Server Mode**:
-  * Headless cluster node exposing:
+  * Headless (no UI) cluster node exposing:
     * LLM engine
     * DB adapters (read schemas, run queries)
   * Supports clustering for HA/failover
@@ -160,9 +160,9 @@ show pending orders in last 24 hours
 
 ### 5. ⚙️ App Modes (CLI Flags or Settings)
 On startup, choose from:
-- `--mode=standalone` – launches GUI + Ollama + adapters
-- `--mode=client` – connects to remote gRPC server
-- `--mode=server` – launches LLM + DB adapters + gRPC interface
+- `--mode=standalone` – launches desktop UI + Ollama + adapters locally
+- `--mode=client` – opens desktop UI that connects to remote gRPC server
+- `--mode=server` – headless mode: launches LLM + DB adapters + gRPC interface (no UI)
 - gRPC used for client-server request handling
 
 ### 6. 📊 Result Visualization

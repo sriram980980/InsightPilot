@@ -6,12 +6,14 @@ import logging
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QTabWidget, QMenuBar, QStatusBar, QSplitter,
-    QMessageBox, QApplication
+    QMessageBox, QApplication, QDialog
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QIcon
 
 from config.config_manager import ConfigManager
+from .tabs import ConnectionsTab, QueryChatTab, ResultsTab, HistoryTab
+from .dialogs import ConnectionDialog
 
 
 class MainWindow(QMainWindow):
@@ -50,54 +52,29 @@ class MainWindow(QMainWindow):
         self.tab_widget = QTabWidget()
         splitter.addWidget(self.tab_widget)
         
-        # Add placeholder tabs (these would be implemented with actual panels)
-        self.add_placeholder_tabs()
+        # Add actual tab implementations
+        self.setup_tabs()
         
         # Set splitter proportions
         splitter.setSizes([200, 1000])
     
-    def add_placeholder_tabs(self):
-        """Add placeholder tabs for MVP demonstration"""
-        # Connection Config Tab
-        config_widget = QWidget()
-        config_layout = QVBoxLayout(config_widget)
-        config_layout.addWidget(self.create_placeholder_label("Database Connection Configuration"))
-        self.tab_widget.addTab(config_widget, "Connections")
+    def setup_tabs(self):
+        """Set up the application tabs"""
+        # Connections Tab
+        self.connections_tab = ConnectionsTab(self.config_manager, self)
+        self.tab_widget.addTab(self.connections_tab, "Connections")
         
-        # Chat Interface Tab
-        chat_widget = QWidget()
-        chat_layout = QVBoxLayout(chat_widget)
-        chat_layout.addWidget(self.create_placeholder_label("Natural Language Query Interface"))
-        self.tab_widget.addTab(chat_widget, "Query Chat")
+        # Query Chat Tab
+        self.query_chat_tab = QueryChatTab(self.config_manager, self)
+        self.tab_widget.addTab(self.query_chat_tab, "Query Chat")
         
         # Results Tab
-        results_widget = QWidget()
-        results_layout = QVBoxLayout(results_widget)
-        results_layout.addWidget(self.create_placeholder_label("Query Results and Visualizations"))
-        self.tab_widget.addTab(results_widget, "Results")
+        self.results_tab = ResultsTab(self.config_manager, self)
+        self.tab_widget.addTab(self.results_tab, "Results")
         
         # History Tab
-        history_widget = QWidget()
-        history_layout = QVBoxLayout(history_widget)
-        history_layout.addWidget(self.create_placeholder_label("Query History and Favorites"))
-        self.tab_widget.addTab(history_widget, "History")
-    
-    def create_placeholder_label(self, text: str):
-        """Create a placeholder label for MVP"""
-        from PySide6.QtWidgets import QLabel
-        label = QLabel(f"[PLACEHOLDER]\n\n{text}\n\nThis panel will be implemented in the full version.")
-        label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet("""
-            QLabel {
-                background-color: #f0f0f0;
-                border: 2px dashed #cccccc;
-                border-radius: 10px;
-                padding: 20px;
-                font-size: 16px;
-                color: #666666;
-            }
-        """)
-        return label
+        self.history_tab = HistoryTab(self.config_manager, self)
+        self.tab_widget.addTab(self.history_tab, "History")
     
     def setup_menu(self):
         """Set up the application menu"""
@@ -184,11 +161,17 @@ class MainWindow(QMainWindow):
     
     def new_connection(self):
         """Handle new connection action"""
-        QMessageBox.information(
-            self, 
-            "New Connection", 
-            "New connection dialog would open here.\n\nThis will be implemented in the full version."
-        )
+        dialog = ConnectionDialog(self.config_manager, parent=self)
+        if dialog.exec() == QDialog.Accepted:
+            # Refresh the connections tab
+            if hasattr(self, 'connections_tab'):
+                self.connections_tab.refresh_connections()
+            
+            QMessageBox.information(
+                self,
+                "Connection Saved",
+                "Database connection has been saved successfully."
+            )
     
     def show_settings(self):
         """Show settings dialog"""

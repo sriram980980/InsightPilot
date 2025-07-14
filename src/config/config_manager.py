@@ -219,4 +219,26 @@ class ConfigManager:
     def get_export_settings(self) -> Dict[str, Any]:
         """Get export settings"""
         return self._config.get("export_settings", {})
+    
+    def get_connections(self) -> Dict[str, Any]:
+        """Get all database connections"""
+        return self._config.get("database_connections", {})
+    
+    def save_connection(self, name: str, config: Dict[str, Any]) -> None:
+        """Save a database connection"""
+        if "database_connections" not in self._config:
+            self._config["database_connections"] = {}
+        
+        self._config["database_connections"][name] = config
+        self._save_config()
+        self.logger.info(f"Saved database connection: {name}")
+    
+    def remove_connection(self, name: str) -> bool:
+        """Remove a database connection"""
+        if name in self._config.get("database_connections", {}):
+            del self._config["database_connections"][name]
+            self._save_config()
+            self.logger.info(f"Removed database connection: {name}")
+            return True
+        return False
 
