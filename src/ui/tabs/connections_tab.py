@@ -75,7 +75,8 @@ class ConnectionsTab(QWidget):
         self.connections_table.selectionModel().selectionChanged.connect(self.on_selection_changed)
         
         layout.addWidget(self.connections_table)
-        
+        self.connections_table.setEditTriggers(QTableWidget.NoEditTriggers)
+
         # Initially disable edit/delete/test buttons
         self.edit_btn.setEnabled(False)
         self.delete_btn.setEnabled(False)

@@ -45,6 +45,11 @@ class ResultsTab(QWidget):
         self.export_btn = QPushButton("Export")
         self.export_btn.clicked.connect(self.export_results)
         header_layout.addWidget(self.export_btn)
+
+        # Edit button (opens dialog)
+        self.edit_btn = QPushButton("Edit Selected")
+        self.edit_btn.clicked.connect(self.open_edit_dialog)
+        header_layout.addWidget(self.edit_btn)
         
         layout.addLayout(header_layout)
         
@@ -94,7 +99,43 @@ class ResultsTab(QWidget):
         
         # Add sample data
         self.load_sample_data()
+
+        # Table is always non-editable
+        self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
     
+    def open_edit_dialog(self):
+        """Open a dialog to edit the selected row"""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QTableWidgetItem
+        selected = self.results_table.currentRow()
+        if selected < 0:
+            QMessageBox.warning(self, "No Selection", "Please select a row to edit.")
+            return
+        # Get current row data
+        row_data = [self.results_table.item(selected, col).text() if self.results_table.item(selected, col) else "" for col in range(self.results_table.columnCount())]
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Edit Row")
+        layout = QVBoxLayout(dialog)
+        edits = []
+        for i, header in enumerate([self.results_table.horizontalHeaderItem(j).text() for j in range(self.results_table.columnCount())]):
+            hlayout = QHBoxLayout()
+            hlayout.addWidget(QLabel(header))
+            edit = QLineEdit(row_data[i])
+            edits.append(edit)
+            hlayout.addWidget(edit)
+            layout.addLayout(hlayout)
+        btn_layout = QHBoxLayout()
+        save_btn = QPushButton("Save")
+        cancel_btn = QPushButton("Cancel")
+        btn_layout.addWidget(save_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+        def save():
+            for col, edit in enumerate(edits):
+                self.results_table.setItem(selected, col, QTableWidgetItem(edit.text()))
+            dialog.accept()
+        save_btn.clicked.connect(save)
+        cancel_btn.clicked.connect(dialog.reject)
+        dialog.exec()
     def load_sample_data(self):
         """Load sample data for demonstration"""
         # Sample data
@@ -117,6 +158,9 @@ class ResultsTab(QWidget):
         
         # Auto-resize columns
         self.results_table.resizeColumnsToContents()
+
+        # Prevent editing by double-click or keypress
+        self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
     
     def export_results(self):
         """Export results to file"""
