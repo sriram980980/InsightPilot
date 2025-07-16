@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QTabWidget, QMenuBar, QStatusBar, QSplitter,
-    QMessageBox, QApplication, QDialog
+    QMessageBox, QApplication, QDialog, QLabel
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QIcon
@@ -25,6 +25,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.config_manager = config_manager
         self.client_mode = client_mode
+        self.server_thread = None  # Reference to server thread if running in standalone mode
         self.logger = logging.getLogger(__name__)
         
         self.setWindowTitle("InsightPilot - AI-Powered Data Explorer")
@@ -124,6 +125,12 @@ class MainWindow(QMainWindow):
         
         mode_text = "Client Mode" if self.client_mode else "Standalone Mode"
         self.status_bar.showMessage(f"Ready - {mode_text}")
+        
+        # Add server status indicator for standalone mode
+        if not self.client_mode:
+            self.server_status_label = QLabel("Server: Starting...")
+            self.server_status_label.setStyleSheet("color: orange; font-weight: bold;")
+            self.status_bar.addPermanentWidget(self.server_status_label)
     
     def load_ui_settings(self):
         """Load UI settings from configuration"""
@@ -224,4 +231,15 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """Handle window close event"""
         self.logger.info("Application closing")
+        
+        # Stop server thread if running
+        if hasattr(self, 'server_thread') and self.server_thread and self.server_thread.isRunning():
+            self.logger.info("Stopping gRPC server thread...")
+            # Try graceful shutdown first
+            if hasattr(self.server_thread, 'stop_server'):
+                self.server_thread.stop_server()
+            # Then terminate the thread
+            self.server_thread.terminate()
+            self.server_thread.wait(5000)  # Wait up to 5 seconds for clean shutdown
+            
         event.accept()

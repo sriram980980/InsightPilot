@@ -8,6 +8,7 @@ import argparse
 import logging
 from pathlib import Path
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QThread, Signal
 
 # Add the src directory to Python path to enable absolute imports
 if getattr(sys, 'frozen', False):
@@ -22,6 +23,42 @@ sys.path.insert(0, application_path)
 from ui.main_window import MainWindow
 from api.server_api import run_server
 from config.config_manager import ConfigManager
+
+
+class ServerThread(QThread):
+    """Thread for running gRPC server in background"""
+    server_started = Signal(str, int)
+    server_error = Signal(str)
+    
+    def __init__(self, host: str, port: int, config_manager: ConfigManager):
+        super().__init__()
+        self.host = host
+        self.port = port
+        self.config_manager = config_manager
+        self.logger = logging.getLogger(__name__)
+        self.server_instance = None
+        
+    def run(self):
+        """Run the gRPC server in background thread"""
+        try:
+            self.logger.info(f"Starting gRPC server thread on {self.host}:{self.port}")
+            self.server_started.emit(self.host, self.port)
+            
+            # Import here to avoid circular imports
+            from api.server_api import InsightPilotServer
+            
+            # Create and start server
+            self.server_instance = InsightPilotServer(self.host, self.port, self.config_manager)
+            self.server_instance.start()
+            
+        except Exception as e:
+            self.logger.error(f"Server thread error: {e}")
+            self.server_error.emit(str(e))
+            
+    def stop_server(self):
+        """Gracefully stop the server"""
+        if self.server_instance:
+            self.server_instance.stop()
 
 
 def setup_logging():
@@ -71,7 +108,7 @@ def parse_arguments():
 
 
 def run_standalone_mode():
-    """Run InsightPilot in standalone mode (GUI + local LLM)"""
+    """Run InsightPilot in standalone mode (GUI + local LLM + gRPC server)"""
     app = QApplication(sys.argv)
     app.setApplicationName("InsightPilot")
     app.setApplicationVersion("1.0.0")
@@ -82,6 +119,33 @@ def run_standalone_mode():
     # Create and show main window
     window = MainWindow(config_manager)
     window.show()
+    
+    # Start gRPC server in background thread
+    server_thread = ServerThread("localhost", 50051, config_manager)
+    
+    # Connect server signals to handle server events
+    def on_server_started(host, port):
+        window.status_bar.showMessage(f"Ready - Standalone Mode (Server: {host}:{port})")
+        if hasattr(window, 'server_status_label'):
+            window.server_status_label.setText(f"Server: Running on {host}:{port}")
+            window.server_status_label.setStyleSheet("color: green; font-weight: bold;")
+        logging.getLogger(__name__).info(f"gRPC server started on {host}:{port}")
+    
+    def on_server_error(error):
+        window.status_bar.showMessage(f"Server Error: {error}")
+        if hasattr(window, 'server_status_label'):
+            window.server_status_label.setText(f"Server: Error - {error}")
+            window.server_status_label.setStyleSheet("color: red; font-weight: bold;")
+        logging.getLogger(__name__).error(f"gRPC server error: {error}")
+    
+    server_thread.server_started.connect(on_server_started)
+    server_thread.server_error.connect(on_server_error)
+    
+    # Start the server thread
+    server_thread.start()
+    
+    # Store server thread reference to prevent garbage collection
+    window.server_thread = server_thread
     
     return app.exec()
 
