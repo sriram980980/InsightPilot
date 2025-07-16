@@ -3,6 +3,8 @@ Main window for InsightPilot application
 """
 
 import logging
+import os
+from pathlib import Path
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QTabWidget, QMenuBar, QStatusBar, QSplitter,
@@ -26,7 +28,7 @@ class MainWindow(QMainWindow):
         self.logger = logging.getLogger(__name__)
         
         self.setWindowTitle("InsightPilot - AI-Powered Data Explorer")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setGeometry(100, 100, 1000, 600)
         
         self.setup_ui()
         self.setup_menu()
@@ -34,6 +36,9 @@ class MainWindow(QMainWindow):
         
         # Load UI settings
         self.load_ui_settings()
+        
+        # Load and apply compact stylesheet
+        self.load_stylesheet()
         
         self.logger.info(f"Main window initialized (client_mode: {client_mode})")
     
@@ -43,6 +48,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         
         layout = QVBoxLayout(central_widget)
+        layout.setContentsMargins(5, 5, 5, 5)  # Reduced margins
+        layout.setSpacing(5)  # Reduced spacing
         
         # Create main splitter
         splitter = QSplitter(Qt.Horizontal)
@@ -50,13 +57,15 @@ class MainWindow(QMainWindow):
         
         # Create tab widget for main content
         self.tab_widget = QTabWidget()
+        self.tab_widget.setTabPosition(QTabWidget.North)
+        self.tab_widget.setDocumentMode(True)  # More compact tabs
         splitter.addWidget(self.tab_widget)
         
         # Add actual tab implementations
         self.setup_tabs()
         
         # Set splitter proportions
-        splitter.setSizes([200, 1000])
+        splitter.setSizes([150, 850])  # More compact sidebar
     
     def setup_tabs(self):
         """Set up the application tabs"""
@@ -158,6 +167,18 @@ class MainWindow(QMainWindow):
         font = self.font()
         font.setPointSize(font_size)
         self.setFont(font)
+    
+    def load_stylesheet(self):
+        """Load and apply the compact stylesheet"""
+        try:
+            style_path = Path(__file__).parent / "style.qss"
+            if style_path.exists():
+                with open(style_path, 'r', encoding='utf-8') as f:
+                    stylesheet = f.read()
+                self.setStyleSheet(stylesheet)
+                self.logger.info("Compact stylesheet loaded successfully")
+        except Exception as e:
+            self.logger.warning(f"Failed to load stylesheet: {e}")
     
     def new_connection(self):
         """Handle new connection action"""
