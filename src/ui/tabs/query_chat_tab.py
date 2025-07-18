@@ -281,7 +281,7 @@ class QueryChatTab(QWidget):
             
             if response.result:
                 ai_response += f"""
-<b>Results:</b> {response.result.total_rows} rows returned in {response.execution_time:.2f}s
+<b>Results:</b> {response.result.row_count} rows returned in {response.execution_time:.2f}s
 <i>Data visualization will be implemented in the next phase.</i>"""
             
             self.add_to_history(ai_response, "assistant")

@@ -6,7 +6,7 @@ import logging
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 
-from adapters.base_adapter import BaseDBAdapter, QueryResult, TableSchema
+from adapters.base_adapter import BaseDBAdapter, QueryResult, TableSchema, DBConnection
 from adapters.mysql_adapter import MySQLAdapter
 from adapters.oracle_adapter import OracleAdapter
 from adapters.mongo_adapter import MongoAdapter
@@ -153,9 +153,9 @@ class ClientAPI:
             schema_dict = {}
             for table in schema:
                 schema_dict[table.name] = {
-                    col.name: {
-                        'type': col.data_type,
-                        'nullable': col.nullable
+                    col['name']: {
+                        'type': col['type'],
+                        'nullable': col.get('nullable', True)
                     } for col in table.columns
                 }
             
@@ -179,61 +179,173 @@ class ClientAPI:
                         sql_query="",
                         result=None,
                         explanation="",
-                        error=f"Could not connect to database: {request.database_name}",
+                        error=f"Could not connect to database: {request.database_name}. Please check your database connection settings.",
                         execution_time=time.time() - start_time
                     )
             
             adapter = self.adapters[request.database_name]
             
             # Get schema information
-            schema = adapter.get_schema()
-            schema_info = self.prompt_builder.format_schema_info(schema)
-            
-            # Generate SQL using LLM
-            if request.database_type == "mongodb":
-                llm_response = self.llm_client.generate_mongodb_query(schema_info, request.question)
-            else:
-                llm_response = self.llm_client.generate_sql(schema_info, request.question)
-            
-            if not llm_response.success:
+            try:
+                schema = adapter.get_schema()
+                if not schema:
+                    self.logger.warning(f"No schema information available for {request.database_name}")
+                    return QueryResponse(
+                        success=False,
+                        sql_query="",
+                        result=None,
+                        explanation="",
+                        error="No schema information available. Database may be empty or inaccessible.",
+                        execution_time=time.time() - start_time
+                    )
+                
+                schema_info = self.prompt_builder.format_schema_info(schema)
+                self.logger.info(f"Retrieved schema for {request.database_name}: {len(schema)} tables")
+                
+            except Exception as schema_error:
+                self.logger.error(f"Failed to retrieve schema: {schema_error}")
                 return QueryResponse(
                     success=False,
                     sql_query="",
                     result=None,
                     explanation="",
-                    error=f"LLM generation failed: {llm_response.error}",
+                    error=f"Failed to retrieve database schema: {str(schema_error)}",
                     execution_time=time.time() - start_time
                 )
             
-            generated_query = llm_response.content.strip()
+            # Generate SQL using LLM with proper prompt
+            try:
+                if request.database_type == "mongodb":
+                    llm_response = self.llm_client.generate_mongodb_query(schema_info, request.question)
+                else:
+                    llm_response = self.llm_client.generate_sql(schema_info, request.question)
+                
+                if not llm_response.success:
+                    return QueryResponse(
+                        success=False,
+                        sql_query="",
+                        result=None,
+                        explanation="",
+                        error=f"LLM generation failed: {llm_response.error}",
+                        execution_time=time.time() - start_time
+                    )
+                
+                generated_query = llm_response.content.strip()
+                
+                # Clean up the generated query (remove markdown formatting if present)
+                if "```sql" in generated_query:
+                    # Extract SQL from markdown code block
+                    start_idx = generated_query.find("```sql") + 6
+                    end_idx = generated_query.find("```", start_idx)
+                    if end_idx > start_idx:
+                        generated_query = generated_query[start_idx:end_idx].strip()
+                elif "```" in generated_query:
+                    # Extract from generic code block
+                    start_idx = generated_query.find("```") + 3
+                    end_idx = generated_query.find("```", start_idx)
+                    if end_idx > start_idx:
+                        generated_query = generated_query[start_idx:end_idx].strip()
+                
+                # Remove any explanatory text before/after the SQL
+                lines = generated_query.split('\n')
+                sql_lines = []
+                in_sql = False
+                
+                for line in lines:
+                    line = line.strip()
+                    if line.upper().startswith(('SELECT', 'WITH', 'SHOW')):
+                        in_sql = True
+                    if in_sql and line:
+                        sql_lines.append(line)
+                    if in_sql and line.endswith(';'):
+                        break
+                
+                if sql_lines:
+                    generated_query = ' '.join(sql_lines)
+                
+                self.logger.info(f"Generated SQL query: {generated_query}")
+                
+            except Exception as llm_error:
+                self.logger.error(f"LLM generation error: {llm_error}")
+                return QueryResponse(
+                    success=False,
+                    sql_query="",
+                    result=None,
+                    explanation="",
+                    error=f"Failed to generate SQL query: {str(llm_error)}",
+                    execution_time=time.time() - start_time
+                )
+            
+            # Validate and sanitize the query
+            try:
+                sanitized_query = adapter.sanitize_query(generated_query)
+            except ValueError as validation_error:
+                self.logger.error(f"Query validation failed: {validation_error}")
+                return QueryResponse(
+                    success=False,
+                    sql_query=generated_query,
+                    result=None,
+                    explanation="",
+                    error=f"Invalid or potentially dangerous query: {str(validation_error)}",
+                    execution_time=time.time() - start_time
+                )
             
             # Execute the query
-            query_result = adapter.execute_query(generated_query)
+            try:
+                query_result = adapter.execute_query(sanitized_query)
+                
+                if query_result.error:
+                    return QueryResponse(
+                        success=False,
+                        sql_query=sanitized_query,
+                        result=None,
+                        explanation="",
+                        error=f"Query execution failed: {query_result.error}",
+                        execution_time=time.time() - start_time
+                    )
+                
+            except Exception as exec_error:
+                self.logger.error(f"Query execution error: {exec_error}")
+                return QueryResponse(
+                    success=False,
+                    sql_query=sanitized_query,
+                    result=None,
+                    explanation="",
+                    error=f"Failed to execute query: {str(exec_error)}",
+                    execution_time=time.time() - start_time
+                )
             
             # Generate explanation
-            explanation_response = self.llm_client.explain_query(generated_query)
-            explanation = explanation_response.content if explanation_response.success else "Query explanation not available"
+            try:
+                explanation_response = self.llm_client.explain_query(sanitized_query)
+                explanation = explanation_response.content if explanation_response.success else "Query explanation not available"
+            except Exception as explain_error:
+                self.logger.warning(f"Failed to generate explanation: {explain_error}")
+                explanation = "Query explanation not available"
             
             # Save to history
-            history_entry = QueryHistoryEntry(
-                database_name=request.database_name,
-                question=request.question,
-                generated_query=generated_query,
-                execution_time=query_result.execution_time,
-                row_count=query_result.row_count,
-                success=query_result.error is None,
-                error_message=query_result.error
-            )
-            self.history_manager.add_query(history_entry)
+            try:
+                history_entry = QueryHistoryEntry(
+                    database_name=request.database_name,
+                    question=request.question,
+                    generated_query=sanitized_query,
+                    execution_time=query_result.execution_time,
+                    row_count=query_result.row_count,
+                    success=True,
+                    error_message=None
+                )
+                self.history_manager.add_query(history_entry)
+            except Exception as history_error:
+                self.logger.warning(f"Failed to save to history: {history_error}")
             
             execution_time = time.time() - start_time
             
             return QueryResponse(
-                success=query_result.error is None,
-                sql_query=generated_query,
+                success=True,
+                sql_query=sanitized_query,
                 result=query_result,
                 explanation=explanation,
-                error=query_result.error,
+                error=None,
                 execution_time=execution_time
             )
             

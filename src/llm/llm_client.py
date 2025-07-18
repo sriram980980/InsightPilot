@@ -23,17 +23,23 @@ class LLMResponse:
 class LLMClient:
     def generate_sql(self, schema_info: str, question: str) -> LLMResponse:
         """Generate SQL query from schema and question using LLM"""
-        prompt = f"""### DB SCHEMA ###\n{schema_info}\n\n### USER QUESTION ###\n{question}\n\n### SQL OUTPUT ###\n"""
+        from llm.prompt_builder import PromptBuilder
+        prompt_builder = PromptBuilder()
+        prompt = prompt_builder.build_sql_prompt(schema_info, question)
         return self.generate(prompt)
 
     def generate_mongodb_query(self, schema_info: str, question: str) -> LLMResponse:
         """Generate MongoDB aggregation query from schema and question using LLM"""
-        prompt = f"""### MONGODB SCHEMA ###\n{schema_info}\n\n### USER QUESTION ###\n{question}\n\n### MONGODB AGGREGATION OUTPUT ###\n"""
+        from llm.prompt_builder import PromptBuilder
+        prompt_builder = PromptBuilder()
+        prompt = prompt_builder.build_mongodb_prompt(schema_info, question)
         return self.generate(prompt)
 
     def explain_query(self, query: str) -> LLMResponse:
         """Ask LLM to explain the generated query"""
-        prompt = f"Explain the following query in simple terms:\n{query}"
+        from llm.prompt_builder import PromptBuilder
+        prompt_builder = PromptBuilder()
+        prompt = prompt_builder.build_explain_prompt(query)
         return self.generate(prompt)
     """Client for communicating with Ollama LLM server"""
     
@@ -104,7 +110,7 @@ class LLMClient:
             response = requests.post(
                 f"{self.base_url}/api/generate",
                 json=payload,
-                timeout=60
+                timeout=180  # Increased timeout for long LLM generations
             )
             response.raise_for_status()
             
