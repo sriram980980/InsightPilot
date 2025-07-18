@@ -94,6 +94,7 @@ class ConfigManager:
         """Get default configuration"""
         return {
             "database_connections": {},
+            "llm_connections": {},
             "llm_settings": {
                 "model": "mistral:7b",
                 "host": "localhost",
@@ -221,24 +222,56 @@ class ConfigManager:
         return self._config.get("export_settings", {})
     
     def get_connections(self) -> Dict[str, Any]:
-        """Get all database connections"""
-        return self._config.get("database_connections", {})
+        """Get all connections (database and LLM)"""
+        connections = {}
+        
+        # Add database connections
+        db_connections = self._config.get("database_connections", {})
+        connections.update(db_connections)
+        
+        # Add LLM connections
+        llm_connections = self._config.get("llm_connections", {})
+        connections.update(llm_connections)
+        
+        return connections
     
     def save_connection(self, name: str, config: Dict[str, Any]) -> None:
-        """Save a database connection"""
-        if "database_connections" not in self._config:
-            self._config["database_connections"] = {}
+        """Save a connection (database or LLM)"""
+        connection_type = config.get('type', 'Unknown')
         
-        self._config["database_connections"][name] = config
+        if connection_type == 'LLM':
+            # Save as LLM connection
+            if "llm_connections" not in self._config:
+                self._config["llm_connections"] = {}
+            self._config["llm_connections"][name] = config
+            self.logger.info(f"Saved LLM connection: {name}")
+        else:
+            # Save as database connection
+            if "database_connections" not in self._config:
+                self._config["database_connections"] = {}
+            self._config["database_connections"][name] = config
+            self.logger.info(f"Saved database connection: {name}")
+        
         self._save_config()
-        self.logger.info(f"Saved database connection: {name}")
     
     def remove_connection(self, name: str) -> bool:
-        """Remove a database connection"""
+        """Remove a connection (database or LLM)"""
+        removed = False
+        
+        # Try to remove from database connections
         if name in self._config.get("database_connections", {}):
             del self._config["database_connections"][name]
-            self._save_config()
+            removed = True
             self.logger.info(f"Removed database connection: {name}")
-            return True
-        return False
+        
+        # Try to remove from LLM connections
+        if name in self._config.get("llm_connections", {}):
+            del self._config["llm_connections"][name]
+            removed = True
+            self.logger.info(f"Removed LLM connection: {name}")
+        
+        if removed:
+            self._save_config()
+        
+        return removed
 

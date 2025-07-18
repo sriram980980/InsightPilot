@@ -54,18 +54,30 @@ package "DB Adapter Layer" {
 * **Standalone Mode (default)**:
   * Starts LLM server locally (Ollama with Mistral 7B)
   * Opens desktop UI with embedded driver + LLM together
+  * Includes gRPC server for external client connections
+  * Full LLM model control and management
 * **Client Mode**:
   * Opens desktop UI that connects to a remote server node/cluster
   * Uses TCP/WebSocket for communication
+  * Can connect to both database and LLM services
 * **Server Mode**:
   * Headless (no UI) cluster node exposing:
-    * LLM engine
+    * LLM engine with model management
     * DB adapters (read schemas, run queries)
+    * gRPC API for client connections
   * Supports clustering for HA/failover
 
 ## 🧠 LLM Integration
 
-* **Model**: `Mistral 7B` via **Ollama** running locally
+* **Model Management**: 
+  * Local LLM control via **Ollama** (Mistral 7B default)
+  * External LLM server connections
+  * Model downloading and startup automation
+  * Real-time status monitoring
+* **Connection Types**:
+  * **Local**: Ollama server on localhost:11434
+  * **Remote**: Connect to external LLM APIs
+  * **Unified Management**: Database and LLM connections in one interface
 * **Prompt Pipeline**:
   1. Schema extraction (example: table names, columns, types)
   2. Natural language input: *"show pending orders in last 24 hours"*
@@ -81,6 +93,11 @@ package "DB Adapter Layer" {
      ### SQL ###
      ```
   4. SQL output validated before execution
+* **UI Controls**:
+  * Start/Stop local LLM models
+  * Connection testing and management
+  * Progress tracking for model operations
+  * Filter connections by type (Database/LLM/All)
 
 ## 🔌 Database Adapters
 
