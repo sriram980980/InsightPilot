@@ -21,6 +21,20 @@ class LLMResponse:
 
 
 class LLMClient:
+    def generate_sql(self, schema_info: str, question: str) -> LLMResponse:
+        """Generate SQL query from schema and question using LLM"""
+        prompt = f"""### DB SCHEMA ###\n{schema_info}\n\n### USER QUESTION ###\n{question}\n\n### SQL OUTPUT ###\n"""
+        return self.generate(prompt)
+
+    def generate_mongodb_query(self, schema_info: str, question: str) -> LLMResponse:
+        """Generate MongoDB aggregation query from schema and question using LLM"""
+        prompt = f"""### MONGODB SCHEMA ###\n{schema_info}\n\n### USER QUESTION ###\n{question}\n\n### MONGODB AGGREGATION OUTPUT ###\n"""
+        return self.generate(prompt)
+
+    def explain_query(self, query: str) -> LLMResponse:
+        """Ask LLM to explain the generated query"""
+        prompt = f"Explain the following query in simple terms:\n{query}"
+        return self.generate(prompt)
     """Client for communicating with Ollama LLM server"""
     
     def __init__(self, host: str = "localhost", port: int = 11434, model: str = "mistral:7b"):

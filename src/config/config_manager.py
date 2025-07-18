@@ -108,7 +108,7 @@ class ConfigManager:
                 "auto_save": True
             },
             "security": {
-                "query_timeout": 30,
+                "query_timeout": 100,
                 "max_rows": 1000,
                 "max_query_history": 100
             },

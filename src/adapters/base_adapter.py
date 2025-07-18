@@ -85,18 +85,31 @@ class BaseDBAdapter(ABC):
         return self._connected
     
     def sanitize_query(self, query: str) -> str:
-        """Sanitize SQL query to prevent injection"""
-        # Remove dangerous SQL keywords
+        """Sanitize SQL query to prevent injection. Only flag dangerous keywords as standalone commands."""
+        import re
+        # Remove comments (lines starting with -- or #, and /* ... */ blocks)
+        def remove_comments(sql):
+            # Remove /* ... */
+            sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.DOTALL)
+            # Remove -- ... and # ...
+            sql = re.sub(r"(--|#).*", "", sql)
+            return sql
+
+        cleaned_query = remove_comments(query)
+        # Remove string literals (single/double quotes)
+        cleaned_query = re.sub(r"'[^']*'", "", cleaned_query)
+        cleaned_query = re.sub(r'"[^"]*"', "", cleaned_query)
+
+        # Check for dangerous keywords as whole words (case-insensitive)
         dangerous_keywords = [
             'DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE',
             'TRUNCATE', 'REPLACE', 'GRANT', 'REVOKE', 'SET', 'SHOW'
         ]
-        
-        query_upper = query.upper()
         for keyword in dangerous_keywords:
-            if keyword in query_upper:
-                raise ValueError(f"Dangerous SQL keyword '{keyword}' detected in query")
-        
+            # Match only if keyword is a whole word (not part of another word)
+            if re.search(rf"\\b{keyword}\\b", cleaned_query, re.IGNORECASE):
+                raise ValueError(f"Dangerous SQL keyword '{keyword}' detected in query.")
+
         return query.strip()
     
     def __enter__(self):

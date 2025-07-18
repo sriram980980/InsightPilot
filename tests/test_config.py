@@ -130,7 +130,7 @@ class TestConfigManager:
     def test_update_security_settings(self):
         """Test updating security settings"""
         new_settings = {
-            "query_timeout": 60,
+            "query_timeout": 100,
             "max_rows": 5000
         }
         
@@ -138,7 +138,7 @@ class TestConfigManager:
             self.config_manager.update_security_settings(new_settings)
             
             security_settings = self.config_manager.get_security_settings()
-            assert security_settings["query_timeout"] == 60
+            assert security_settings["query_timeout"] == 100
             assert security_settings["max_rows"] == 5000
             mock_save.assert_called_once()
     

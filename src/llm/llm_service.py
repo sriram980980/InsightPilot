@@ -147,7 +147,7 @@ class LLMStartupThread(QThread):
             response = requests.post(
                 "http://localhost:11434/api/generate",
                 json=payload,
-                timeout=30
+                timeout=100  # 100 seconds timeout for generation
             )
             
             return response.status_code == 200

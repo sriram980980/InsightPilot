@@ -164,12 +164,17 @@ class QueryChatTab(QWidget):
     def load_connections(self):
         """Load available database and LLM connections"""
         try:
-            connections = self.config_manager.get_connections()
-            
+            connections_dict = self.config_manager.get_connections()
+            # Convert to list of dicts, adding 'name' key
+            connections = []
+            for name, conn in connections_dict.items():
+                if isinstance(conn, dict):
+                    conn = dict(conn)  # copy
+                    conn['name'] = name
+                    connections.append(conn)
             # Clear existing items
             self.db_connection_combo.clear()
             self.llm_connection_combo.clear()
-            
             # Populate database connections
             db_connections = [conn for conn in connections if conn.get('type') != 'LLM']
             for conn in db_connections:
@@ -177,17 +182,14 @@ class QueryChatTab(QWidget):
                     f"{conn['name']} ({conn.get('database_type', 'Unknown')})",
                     conn['name']
                 )
-            
-            # Populate LLM connections  
+            # Populate LLM connections
             llm_connections = [conn for conn in connections if conn.get('type') == 'LLM']
             for conn in llm_connections:
                 self.llm_connection_combo.addItem(
                     f"{conn['name']} ({conn.get('provider', 'Unknown')})",
                     conn['name']
                 )
-            
             self.logger.info(f"Loaded {len(db_connections)} database and {len(llm_connections)} LLM connections")
-            
         except Exception as e:
             self.logger.error(f"Error loading connections: {e}")
             QMessageBox.warning(
@@ -231,7 +233,13 @@ class QueryChatTab(QWidget):
         
         # Get database type from connection config
         connections = self.config_manager.get_connections()
-        db_config = next((c for c in connections if c['name'] == db_connection), {})
+        db_config = {}
+        if isinstance(connections, dict):
+            # If connections is a dict of connection dicts
+            db_config = connections.get(db_connection, {})
+        elif isinstance(connections, list):
+            # If connections is a list of dicts
+            db_config = next((c for c in connections if c.get('name') == db_connection), {})
         database_type = db_config.get('database_type', 'mysql')
         
         # Create query request

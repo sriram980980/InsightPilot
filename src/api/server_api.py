@@ -94,6 +94,32 @@ class InsightPilotServiceImpl(insightpilot_pb2_grpc.InsightPilotServiceServicer)
             response.success = False
             response.error = str(e)
             return response
+
+    def ListConnections(self, request, context):
+        """List available connections"""
+        try:
+            connections = self.config_manager.get_connections()
+            response = insightpilot_pb2.ListConnectionsResponse()
+            response.success = True
+            for conn in connections:
+                conn_info = response.connections.add()
+                conn_info.name = conn['name']
+                conn_info.type = conn.get('type', 'database')
+                conn_info.status = "connected"  # TODO: Implement actual status check
+            return response
+        except Exception as e:
+            self.logger.error(f"ListConnections error: {e}")
+            response = insightpilot_pb2.ListConnectionsResponse()
+            response.success = False
+            response.error = str(e)
+            return response
+
+    def HealthCheck(self, request, context):
+        """Health check endpoint"""
+        response = insightpilot_pb2.HealthResponse()
+        response.healthy = True
+        response.status = "Server is running"
+        return response
     
     def ListConnections(self, request, context):
         """List available connections"""
