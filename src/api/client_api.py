@@ -139,6 +139,32 @@ class ClientAPI:
         
         return self.adapters[database_name].get_schema()
     
+    def get_schema(self, database_name: str, database_type: str = None) -> Dict[str, Dict]:
+        """Get database schema in dictionary format"""
+        try:
+            if database_name not in self.adapters:
+                if not self.connect_to_database(database_name):
+                    raise ValueError(f"Could not connect to database: {database_name}")
+            
+            adapter = self.adapters[database_name]
+            schema = adapter.get_schema()
+            
+            # Convert TableSchema list to dictionary format
+            schema_dict = {}
+            for table in schema:
+                schema_dict[table.name] = {
+                    col.name: {
+                        'type': col.data_type,
+                        'nullable': col.nullable
+                    } for col in table.columns
+                }
+            
+            return schema_dict
+            
+        except Exception as e:
+            self.logger.error(f"Error getting schema for {database_name}: {e}")
+            raise
+    
     def execute_natural_language_query(self, request: QueryRequest) -> QueryResponse:
         """Execute a natural language query"""
         import time
@@ -221,6 +247,10 @@ class ClientAPI:
                 error=str(e),
                 execution_time=time.time() - start_time
             )
+    
+    def execute_query(self, request: QueryRequest) -> QueryResponse:
+        """Execute a query request (alias for execute_natural_language_query)"""
+        return self.execute_natural_language_query(request)
     
     def get_query_history(self, database_name: Optional[str] = None, limit: int = 50) -> List[QueryHistoryEntry]:
         """Get query history"""

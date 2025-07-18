@@ -6,7 +6,7 @@ import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QLabel, QMessageBox, QComboBox, QGroupBox, QProgressBar
+    QLabel, QMessageBox, QComboBox, QGroupBox, QProgressBar, QDialog
 )
 from PySide6.QtCore import Qt
 
@@ -216,7 +216,7 @@ class ConnectionsTab(QWidget):
             else:
                 dialog = ConnectionDialog(self.config_manager, connection_name, parent=self)
                 
-            if dialog.exec() == dialog.Accepted:
+            if dialog.exec() == QDialog.Accepted:
                 # Refresh the connections table
                 self.load_connections()
                 QMessageBox.information(
@@ -376,7 +376,7 @@ class ConnectionsTab(QWidget):
     def new_llm_connection(self):
         """Create a new LLM connection"""
         dialog = LLMConnectionDialog(self.config_manager, parent=self)
-        if dialog.exec() == dialog.Accepted:
+        if dialog.exec() == QDialog.Accepted:
             self.load_connections()
             QMessageBox.information(
                 self,
