@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 def test_llm_dialog():
     """Test LLM connection dialog"""
-    print("Testing LLM Connection Dialog...")
+    print("Testing LLM Connection Dialog!")
     
     try:
         from PySide6.QtWidgets import QApplication
@@ -46,7 +46,7 @@ def test_llm_dialog():
 
 def test_llm_service():
     """Test LLM service functionality"""
-    print("\nTesting LLM Service...")
+    print("\nTesting LLM Service!")
     
     try:
         from llm.llm_service import LLMService
@@ -73,7 +73,7 @@ def test_llm_service():
 
 def test_config_manager():
     """Test config manager LLM support"""
-    print("\nTesting Config Manager LLM Support...")
+    print("\nTesting Config Manager LLM Support!")
     
     try:
         from config.config_manager import ConfigManager
@@ -112,7 +112,7 @@ def test_config_manager():
 
 def test_connections_tab():
     """Test connections tab integration"""
-    print("\nTesting Connections Tab Integration...")
+    print("\nTesting Connections Tab Integration!")
     
     try:
         from PySide6.QtWidgets import QApplication

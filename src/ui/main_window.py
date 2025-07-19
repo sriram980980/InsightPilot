@@ -108,6 +108,13 @@ class MainWindow(QMainWindow):
         # Tools menu
         tools_menu = menubar.addMenu("&Tools")
         
+        # LLM Providers submenu
+        llm_providers_action = QAction("LLM &Providers", self)
+        llm_providers_action.triggered.connect(self.show_llm_providers)
+        tools_menu.addAction(llm_providers_action)
+        
+        tools_menu.addSeparator()
+        
         settings_action = QAction("&Settings", self)
         settings_action.triggered.connect(self.show_settings)
         tools_menu.addAction(settings_action)
@@ -128,7 +135,7 @@ class MainWindow(QMainWindow):
         
         # Add server status indicator for standalone mode
         if not self.client_mode:
-            self.server_status_label = QLabel("Server: Starting...")
+            self.server_status_label = QLabel("Server: Starting!")
             self.server_status_label.setStyleSheet("color: orange; font-weight: bold;")
             self.status_bar.addPermanentWidget(self.server_status_label)
     
@@ -201,6 +208,34 @@ class MainWindow(QMainWindow):
                 "Database connection has been saved successfully."
             )
     
+    def show_llm_providers(self):
+        """Show LLM provider configuration dialog"""
+        try:
+            from .dialogs import LLMProviderDialog
+            
+            dialog = LLMProviderDialog(self.config_manager, self)
+            dialog.providers_changed.connect(self.on_providers_changed)
+            
+            if dialog.exec() == QDialog.Accepted:
+                QMessageBox.information(
+                    self,
+                    "Providers Updated",
+                    "LLM provider configuration has been updated successfully."
+                )
+        except Exception as e:
+            self.logger.error(f"Failed to open LLM provider dialog: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to open LLM provider configuration: {str(e)}"
+            )
+    
+    def on_providers_changed(self):
+        """Handle LLM provider configuration changes"""
+        # Refresh any tabs that depend on LLM configuration
+        if hasattr(self, 'query_chat_tab'):
+            self.query_chat_tab.refresh_llm_client()
+    
     def show_settings(self):
         """Show settings dialog"""
         QMessageBox.information(
@@ -234,7 +269,7 @@ class MainWindow(QMainWindow):
         
         # Stop server thread if running
         if hasattr(self, 'server_thread') and self.server_thread and self.server_thread.isRunning():
-            self.logger.info("Stopping gRPC server thread...")
+            self.logger.info("Stopping gRPC server thread!")
             # Try graceful shutdown first
             if hasattr(self.server_thread, 'stop_server'):
                 self.server_thread.stop_server()

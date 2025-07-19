@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 def test_server_standalone():
     """Test server startup in standalone mode"""
-    print("Testing gRPC server startup in standalone mode...")
+    print("Testing gRPC server startup in standalone mode!")
     
     # Set up logging
     logging.basicConfig(level=logging.INFO)
@@ -55,7 +55,7 @@ def test_server_standalone():
 
 def test_ui_with_server():
     """Test UI components for server integration"""
-    print("\nTesting UI components for server integration...")
+    print("\nTesting UI components for server integration!")
     
     try:
         from config.config_manager import ConfigManager

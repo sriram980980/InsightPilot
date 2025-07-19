@@ -31,13 +31,13 @@ class QueryExecutionThread(QThread):
     def run(self):
         """Execute the query in background"""
         try:
-            self.progress_updated.emit("Getting database schema...")
+            self.progress_updated.emit("Getting database schema!")
             schema = self.client_api.get_schema(
                 self.query_request.database_name,
                 self.query_request.database_type
             )
             
-            self.progress_updated.emit("Generating SQL query with LLM...")
+            self.progress_updated.emit("Generating SQL query with LLM!")
             response = self.client_api.execute_query(self.query_request)
             
             self.query_completed.emit(response)
@@ -87,12 +87,12 @@ class QueryChatTab(QWidget):
         
         # Database connection dropdown
         self.db_connection_combo = QComboBox()
-        self.db_connection_combo.setPlaceholderText("Select database connection...")
+        self.db_connection_combo.setPlaceholderText("Select database connection!")
         config_layout.addRow("Database Connection:", self.db_connection_combo)
         
         # LLM connection dropdown
         self.llm_connection_combo = QComboBox()
-        self.llm_connection_combo.setPlaceholderText("Select LLM connection...")
+        self.llm_connection_combo.setPlaceholderText("Select LLM connection!")
         config_layout.addRow("LLM Connection:", self.llm_connection_combo)
         
         # Visualization framework dropdown
@@ -128,7 +128,7 @@ class QueryChatTab(QWidget):
         history_layout.addWidget(history_label)
         
         self.chat_history = QTextBrowser()
-        self.chat_history.setPlaceholderText("Query history and AI responses will appear here...")
+        self.chat_history.setPlaceholderText("Query history and AI responses will appear here!")
         history_layout.addWidget(self.chat_history)
         
         splitter.addWidget(history_widget)
@@ -199,6 +199,16 @@ class QueryChatTab(QWidget):
                     f"{conn['name']} ({conn.get('provider', 'Unknown')})",
                     conn['name']
                 )
+            
+            # Add LLM providers to the combo as well
+            llm_providers = self.config_manager.get_llm_providers()
+            for provider_name, provider_config in llm_providers.items():
+                if provider_config.get("enabled", True):
+                    self.llm_connection_combo.addItem(
+                        f"{provider_name} ({provider_config.get('provider', 'Unknown')})",
+                        provider_name
+                    )
+            
             self.logger.info(f"Loaded {len(db_connections)} database and {len(llm_connections)} LLM connections")
         except Exception as e:
             self.logger.error(f"Error loading connections: {e}")
@@ -344,3 +354,24 @@ class QueryChatTab(QWidget):
         # Scroll to bottom
         scrollbar = self.chat_history.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+    
+    def refresh_llm_client(self):
+        """Refresh the LLM client configuration"""
+        try:
+            # Reinitialize client API which will create new enhanced LLM client
+            self.client_api = ClientAPI(self.config_manager)
+            
+            # Update LLM client reference
+            try:
+                self.llm_client = self.client_api._init_llm_client()
+            except Exception as e:
+                self.logger.warning(f"Failed to refresh LLM client: {e}")
+                self.llm_client = None
+            
+            # Reload connections to reflect provider changes
+            self.load_connections()
+            
+            self.logger.info("LLM client refreshed successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to refresh LLM client: {e}")

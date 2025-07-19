@@ -95,7 +95,20 @@ class ConfigManager:
         return {
             "database_connections": {},
             "llm_connections": {},
+            "llm_providers": {
+                "ollama": {
+                    "provider": "ollama",
+                    "model": "mistral:7b",
+                    "base_url": "http://localhost:11434",
+                    "temperature": 0.1,
+                    "max_tokens": 1000,
+                    "timeout": 180,
+                    "enabled": True
+                }
+            },
             "llm_settings": {
+                "default_provider": "ollama",
+                "fallback_providers": ["ollama"],
                 "model": "mistral:7b",
                 "host": "localhost",
                 "port": 11434,
@@ -274,4 +287,61 @@ class ConfigManager:
             self._save_config()
         
         return removed
+    
+    def get_llm_providers(self) -> Dict[str, Any]:
+        """Get all LLM provider configurations"""
+        return self._config.get("llm_providers", {})
+    
+    def add_llm_provider(self, name: str, provider_config: Dict[str, Any]) -> None:
+        """Add a new LLM provider configuration"""
+        if "llm_providers" not in self._config:
+            self._config["llm_providers"] = {}
+        
+        self._config["llm_providers"][name] = provider_config
+        self._save_config()
+        self.logger.info(f"Added LLM provider: {name}")
+    
+    def remove_llm_provider(self, name: str) -> bool:
+        """Remove an LLM provider configuration"""
+        if name in self._config.get("llm_providers", {}):
+            del self._config["llm_providers"][name]
+            
+            # Update default provider if necessary
+            llm_settings = self._config.get("llm_settings", {})
+            if llm_settings.get("default_provider") == name:
+                remaining_providers = list(self._config.get("llm_providers", {}).keys())
+                if remaining_providers:
+                    llm_settings["default_provider"] = remaining_providers[0]
+                    self.logger.info(f"Updated default provider to: {remaining_providers[0]}")
+            
+            # Update fallback providers
+            fallback_providers = llm_settings.get("fallback_providers", [])
+            if name in fallback_providers:
+                fallback_providers.remove(name)
+                llm_settings["fallback_providers"] = fallback_providers
+            
+            self._save_config()
+            self.logger.info(f"Removed LLM provider: {name}")
+            return True
+        return False
+    
+    def update_llm_provider(self, name: str, provider_config: Dict[str, Any]) -> bool:
+        """Update an existing LLM provider configuration"""
+        if name in self._config.get("llm_providers", {}):
+            self._config["llm_providers"][name].update(provider_config)
+            self._save_config()
+            self.logger.info(f"Updated LLM provider: {name}")
+            return True
+        return False
+    
+    def set_default_llm_provider(self, provider_name: str) -> bool:
+        """Set the default LLM provider"""
+        if provider_name in self._config.get("llm_providers", {}):
+            if "llm_settings" not in self._config:
+                self._config["llm_settings"] = {}
+            self._config["llm_settings"]["default_provider"] = provider_name
+            self._save_config()
+            self.logger.info(f"Set default LLM provider to: {provider_name}")
+            return True
+        return False
 

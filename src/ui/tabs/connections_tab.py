@@ -41,7 +41,7 @@ class ConnectionsTab(QWidget):
         # LLM status and controls
         llm_control_layout = QHBoxLayout()
         
-        self.llm_status_label = QLabel("LLM Status: Checking...")
+        self.llm_status_label = QLabel("LLM Status: Checking!")
         self.llm_status_label.setStyleSheet("font-weight: bold;")
         llm_control_layout.addWidget(self.llm_status_label)
         
@@ -255,10 +255,10 @@ class ConnectionsTab(QWidget):
                 
                 # Disable test button during test
                 self.test_btn.setEnabled(False)
-                self.test_btn.setText("Testing...")
+                self.test_btn.setText("Testing!")
                 
                 # Update status in table
-                self.connections_table.setItem(current_row, 4, QTableWidgetItem("Testing..."))
+                self.connections_table.setItem(current_row, 4, QTableWidgetItem("Testing!"))
                 
                 # Start appropriate connection test
                 if connection_type == 'LLM':
@@ -339,7 +339,7 @@ class ConnectionsTab(QWidget):
             self.llm_progress.setVisible(True)
             self.llm_progress.setRange(0, 0)  # Indeterminate
             self.llm_progress_label.setVisible(True)
-            self.llm_progress_label.setText("Initializing LLM startup...")
+            self.llm_progress_label.setText("Initializing LLM startup!")
             
             # Start the thread
             self.llm_startup_thread.start()

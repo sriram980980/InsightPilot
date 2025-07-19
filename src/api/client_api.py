@@ -10,7 +10,7 @@ from adapters.base_adapter import BaseDBAdapter, QueryResult, TableSchema, DBCon
 from adapters.mysql_adapter import MySQLAdapter
 from adapters.oracle_adapter import OracleAdapter
 from adapters.mongo_adapter import MongoAdapter
-from llm.llm_client import LLMClient, LLMResponse
+from llm.llm_client import create_llm_client, LLMResponse
 from llm.prompt_builder import PromptBuilder
 from history.history_manager import HistoryManager, QueryHistoryEntry
 from config.config_manager import ConfigManager
@@ -42,7 +42,7 @@ class ClientAPI:
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
         
-        # Initialize components
+        # Initialize components with enhanced LLM client
         self.llm_client = self._init_llm_client()
         self.prompt_builder = PromptBuilder()
         self.history_manager = HistoryManager()
@@ -50,15 +50,15 @@ class ClientAPI:
         # Active database adapters
         self.adapters: Dict[str, BaseDBAdapter] = {}
     
-    def _init_llm_client(self) -> LLMClient:
-        """Initialize LLM client from configuration"""
-        llm_settings = self.config_manager.get_llm_settings()
-        
-        return LLMClient(
-            host=llm_settings.get("host", "localhost"),
-            port=llm_settings.get("port", 11434),
-            model=llm_settings.get("model", "mistral:7b")
-        )
+    def _init_llm_client(self):
+        """Initialize enhanced LLM client from configuration"""
+        try:
+            # Try to create enhanced LLM client with multiple providers
+            return create_llm_client(self.config_manager, legacy_mode=False)
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize enhanced LLM client, falling back to legacy: {e}")
+            # Fallback to legacy Ollama-only client
+            return create_llm_client(None, legacy_mode=True)
     
     def get_database_connections(self) -> Dict[str, Any]:
         """Get available database connections"""
@@ -436,7 +436,7 @@ class ClientAPI:
 3. Include LIMIT clause (max 1000 rows)
 4. Use table aliases for better readability
 5. Ensure all columns in SELECT are either in GROUP BY or are aggregate functions
-
+6. Include only the query result, no additional text or explanations or alternative queries, the query should work as it is with no further modifications
 ### ORIGINAL QUESTION ###
 {question}
 

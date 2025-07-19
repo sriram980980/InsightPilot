@@ -10,7 +10,7 @@ from concurrent import futures
 
 def test_server_connection():
     """Test basic gRPC server connection"""
-    print("Testing gRPC server connection...")
+    print("Testing gRPC server connection!")
     
     try:
         # Create a channel to the server

@@ -26,7 +26,7 @@ class LLMTestThread(QThread):
     def run(self):
         """Test the LLM connection"""
         try:
-            self.progress_update.emit("Connecting to LLM server...")
+            self.progress_update.emit("Connecting to LLM server!")
             
             # Create LLM client
             client = LLMClient(
@@ -36,13 +36,13 @@ class LLMTestThread(QThread):
             )
             
             # Test health check
-            self.progress_update.emit("Checking server health...")
+            self.progress_update.emit("Checking server health!")
             if not client.health_check():
                 self.result_ready.emit(False, "LLM server is not running or unreachable")
                 return
             
             # Test model availability
-            self.progress_update.emit("Checking model availability...")
+            self.progress_update.emit("Checking model availability!")
             models = client.list_models()
             available_models = [model["name"] for model in models.get("models", [])]
             
@@ -51,7 +51,7 @@ class LLMTestThread(QThread):
                 return
             
             # Test generation
-            self.progress_update.emit("Testing text generation...")
+            self.progress_update.emit("Testing text generation!")
             response = client.generate("Hello, this is a test prompt.")
             
             if response.success:

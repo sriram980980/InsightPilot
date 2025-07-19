@@ -197,7 +197,7 @@ class ConnectionDialog(QDialog):
         form_layout.addRow("Password:", self.password_edit)
         
         # Store in vault checkbox
-        self.store_vault_check = QCheckBox("Store in Vault ...")
+        self.store_vault_check = QCheckBox("Store in Vault !")
         self.store_vault_check.setChecked(True)
         form_layout.addRow("", self.store_vault_check)
         
@@ -342,7 +342,7 @@ class ConnectionDialog(QDialog):
         
         # Disable test button during test
         self.test_btn.setEnabled(False)
-        self.test_btn.setText("Testing...")
+        self.test_btn.setText("Testing!")
         
         # Start connection test in separate thread
         self.test_thread = ConnectionTestThread(config)

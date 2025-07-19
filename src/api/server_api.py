@@ -203,7 +203,7 @@ class InsightPilotServer:
     def stop(self):
         """Stop the gRPC server"""
         if self.server and self.running:
-            self.logger.info("Stopping gRPC server...")
+            self.logger.info("Stopping gRPC server!")
             self.running = False
             self.server.stop(grace=5)
             self.logger.info("gRPC server stopped")
@@ -220,7 +220,7 @@ def run_server(host: str, port: int, config_manager: ConfigManager):
     
     # Handle graceful shutdown
     def signal_handler(signum, frame):
-        logger.info(f"Received signal {signum}, shutting down...")
+        logger.info(f"Received signal {signum}, shutting down!")
         server.stop()
     
     signal.signal(signal.SIGINT, signal_handler)

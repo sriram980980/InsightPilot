@@ -194,7 +194,7 @@ class ResultsTab(QWidget):
             chart_bytes = self.chart_renderer.render_chart(
                 self.current_result,
                 chart_type=chart_type,
-                title=f"Query Results - {self.current_explanation[:50]}..." if self.current_explanation else "Query Results"
+                title=f"Query Results - {self.current_explanation[:50]}!" if self.current_explanation else "Query Results"
             )
             
             if chart_bytes:

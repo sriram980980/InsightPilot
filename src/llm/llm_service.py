@@ -25,31 +25,31 @@ class LLMStartupThread(QThread):
     def run(self):
         """Start the LLM model"""
         try:
-            self.startup_progress.emit("Checking if Ollama is installed...")
+            self.startup_progress.emit("Checking if Ollama is installed!")
             
             # Check if Ollama is installed
             if not self.check_ollama_installed():
                 self.startup_complete.emit(False, "Ollama is not installed. Please install Ollama first.")
                 return
             
-            self.startup_progress.emit("Starting Ollama server...")
+            self.startup_progress.emit("Starting Ollama server!")
             
             # Start Ollama server
             if not self.start_ollama_server():
                 self.startup_complete.emit(False, "Failed to start Ollama server")
                 return
             
-            self.startup_progress.emit("Checking model availability...")
+            self.startup_progress.emit("Checking model availability!")
             
             # Check if model is available, if not pull it
             if not self.check_model_available():
-                self.startup_progress.emit(f"Pulling model {self.model_name}...")
+                self.startup_progress.emit(f"Pulling model {self.model_name}!")
                 if not self.pull_model():
                     self.startup_complete.emit(False, f"Failed to pull model {self.model_name}")
                     return
                 self.model_pulled.emit(self.model_name)
             
-            self.startup_progress.emit("Testing model...")
+            self.startup_progress.emit("Testing model!")
             
             # Test the model
             if self.test_model():

@@ -95,7 +95,7 @@ class HistoryTab(QWidget):
         self.query_preview = QTextEdit()
         self.query_preview.setReadOnly(True)
         self.query_preview.setMaximumHeight(150)
-        self.query_preview.setPlaceholderText("Select a query from the history to view the generated SQL...")
+        self.query_preview.setPlaceholderText("Select a query from the history to view the generated SQL!")
         preview_layout.addWidget(self.query_preview)
         
         splitter.addWidget(preview_widget)
