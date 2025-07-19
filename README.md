@@ -206,7 +206,10 @@ Configure your AI engine for optimal performance:
 - **Custom APIs**: Integrate with your organization's LLM services
 
 ---
-
+![alt text](image.png)
+![alt text](image-1.png)
+![alt text](image-2.png)
+![alt text](image-3.png)
 ## 🎨 UI Features & Controls
 
 ### 📊 **Chart Zoom Controls**

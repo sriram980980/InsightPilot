@@ -14,6 +14,7 @@ from PySide6.QtGui import QPixmap
 
 from adapters.base_adapter import QueryResult
 from visualization.chart_renderer import ChartRenderer
+from ui.widgets.enhanced_chart_widget import EnhancedChartArea
 
 
 class ResultsTab(QWidget):
@@ -84,7 +85,7 @@ class ResultsTab(QWidget):
         
         splitter.addWidget(table_widget)
         
-        # Chart area
+        # Chart area with enhanced zoom functionality
         chart_widget = QWidget()
         chart_layout = QVBoxLayout(chart_widget)
         
@@ -92,25 +93,11 @@ class ResultsTab(QWidget):
         chart_label.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 5px;")
         chart_layout.addWidget(chart_label)
         
-        # Create scroll area for chart
-        self.chart_scroll = QScrollArea()
-        self.chart_scroll.setWidgetResizable(True)
-        self.chart_scroll.setAlignment(Qt.AlignCenter)
+        # Use enhanced chart area with zoom functionality
+        self.enhanced_chart_area = EnhancedChartArea()
+        chart_layout.addWidget(self.enhanced_chart_area)
         
-        self.chart_placeholder = QLabel("Chart visualization will appear here")
-        self.chart_placeholder.setAlignment(Qt.AlignCenter)
-        self.chart_placeholder.setStyleSheet("""
-            QLabel {
-                background-color: #f8f8f8;
-                border: 2px dashed #cccccc;
-                border-radius: 10px;
-                padding: 20px;
-                color: #666666;
-            }
-        """)
-        self.chart_scroll.setWidget(self.chart_placeholder)
-        chart_layout.addWidget(self.chart_scroll)
-        
+        splitter.addWidget(chart_widget)
         splitter.addWidget(chart_widget)
         
         # Set splitter proportions
@@ -157,7 +144,7 @@ class ResultsTab(QWidget):
                 self.results_table.setHorizontalHeaderLabels(["Result"])
                 self.results_table.setRowCount(1)
                 self.results_table.setItem(0, 0, QTableWidgetItem("No data returned"))
-                self.chart_placeholder.setText("No data available for visualization")
+                self.enhanced_chart_area.show_placeholder("No data available for visualization")
                 
         except Exception as e:
             self.logger.error(f"Error loading query results: {e}")
@@ -170,8 +157,7 @@ class ResultsTab(QWidget):
     def update_visualization(self):
         """Update the chart visualization based on current data and selected type"""
         if not self.current_result or not self.current_result.rows:
-            self.chart_placeholder.setText("No data available for visualization")
-            self.chart_scroll.setWidget(self.chart_placeholder)
+            self.enhanced_chart_area.show_placeholder("No data available for visualization")
             return
         
         try:
@@ -198,25 +184,15 @@ class ResultsTab(QWidget):
             )
             
             if chart_bytes:
-                # Display chart image
-                pixmap = QPixmap()
-                pixmap.loadFromData(chart_bytes)
-                
-                chart_label = QLabel()
-                chart_label.setPixmap(pixmap)
-                chart_label.setAlignment(Qt.AlignCenter)
-                chart_label.setScaledContents(False)
-                
-                self.chart_scroll.setWidget(chart_label)
+                # Display chart using enhanced chart area with zoom functionality
+                self.enhanced_chart_area.display_chart(chart_bytes)
                 self.logger.info(f"Chart updated with type: {selected_viz}")
             else:
-                self.chart_placeholder.setText(f"Unable to create {selected_viz} visualization")
-                self.chart_scroll.setWidget(self.chart_placeholder)
+                self.enhanced_chart_area.show_placeholder(f"Unable to create {selected_viz} visualization")
                 
         except Exception as e:
             self.logger.error(f"Error updating visualization: {e}")
-            self.chart_placeholder.setText(f"Error creating visualization: {str(e)}")
-            self.chart_scroll.setWidget(self.chart_placeholder)
+            self.enhanced_chart_area.show_error(f"Error creating visualization: {str(e)}")
     
     def open_edit_dialog(self):
         """Open a dialog to edit the selected row"""
