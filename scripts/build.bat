@@ -1,12 +1,7 @@
 @echo off
-REM One-click builREM Install dependencies
-echo Installing dependencies!
-pip install -r requirements.txt
+REM One-click build for InsightPilot (Windows)
 
-REM Development dependencies are already included in requirements.txt
-echo All dependencies installed!t for InsightPilot (Windows)
-
-echo Building InsightPilot!
+echo Building InsightPilot v0.0.1-nightly (POC)!
 echo.
 
 REM Check if Python is installed
@@ -38,7 +33,7 @@ pip install -r requirements.txt
 
 REM Install development dependencies
 echo Installing development dependencies!
-#pip install -r requirements.txt
+REM Development dependencies are already included in requirements.txt
 
 REM Run tests
 echo Running tests!
