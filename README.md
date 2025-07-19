@@ -287,9 +287,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### 🛣️ Roadmap
 
 - **🎯 Q1 2025**: Enhanced AI models, more chart types
-- **📱 Q2 2025**: Web interface, mobile app
-- **🌐 Q3 2025**: Cloud deployment, collaboration features
-- **🔮 Q4 2025**: Advanced analytics, machine learning integration
+
 
 ### 📊 **Current Status**
 
