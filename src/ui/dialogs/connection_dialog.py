@@ -170,6 +170,13 @@ class ConnectionDialog(QDialog):
         name_layout.addWidget(QLabel("Connection Name:"))
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("Type a name for the connection")
+        
+        # Make connection name read-only when editing existing connection
+        if self.connection_name:
+            self.name_edit.setReadOnly(True)
+            self.name_edit.setToolTip("Connection name cannot be changed when editing an existing connection")
+            self.name_edit.setStyleSheet("background-color: #f0f0f0;")
+        
         name_layout.addWidget(self.name_edit)
         layout.addLayout(name_layout)
         
@@ -179,8 +186,22 @@ class ConnectionDialog(QDialog):
         self.type_combo = QComboBox()
         self.type_combo.addItems(["MySQL", "MongoDB", "PostgreSQL"])
         self.type_combo.currentTextChanged.connect(self.on_type_changed)
+        
+        # Make database type read-only when editing existing connection
+        if self.connection_name:
+            self.type_combo.setEnabled(False)
+            self.type_combo.setToolTip("Database type cannot be changed when editing an existing connection")
+        
         type_layout.addWidget(self.type_combo)
-        type_layout.addWidget(QLabel("Type of database to connect to"))
+        
+        # Add info label for edit mode
+        if self.connection_name:
+            info_label = QLabel("(Type cannot be changed)")
+            info_label.setStyleSheet("color: #666666; font-style: italic; font-size: 10px;")
+            type_layout.addWidget(info_label)
+        else:
+            type_layout.addWidget(QLabel("Type of database to connect to"))
+        
         layout.addLayout(type_layout)
         
         # Create tab widget for different parameter sets
