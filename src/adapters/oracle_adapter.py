@@ -153,7 +153,7 @@ class OracleAdapter(BaseDBAdapter):
         # Sanitize and validate query
         query = self.sanitize_query(query)
         if not self.validate_query(query):
-            raise ValueError("Invalid or potentially dangerous query")
+            raise ValueError(f"Invalid or potentially dangerous query '{query}'")
         
         cursor = self._conn.cursor()
         start_time = time.time()

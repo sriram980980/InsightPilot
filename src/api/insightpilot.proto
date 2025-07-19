@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package insightpilot;
+
+// Request for schema information
+message SchemaRequest {
+    string connection_name = 1;
+    string database_type = 2; // mysql, oracle, mongodb
+}
+
+// Schema response
+message SchemaResponse {
+    bool success = 1;
+    string error = 2;
+    repeated TableInfo tables = 3;
+}
+
+message TableInfo {
+    string name = 1;
+    repeated ColumnInfo columns = 2;
+}
+
+message ColumnInfo {
+    string name = 1;
+    string type = 2;
+    bool nullable = 3;
+}
+
+// Query request
+message QueryRequest {
+    string database_connection = 1;
+    string llm_connection = 2;
+    string natural_language_query = 3;
+    string visualization_type = 4; // chart, table, auto
+}
+
+// Query response
+message QueryResponse {
+    bool success = 1;
+    string error = 2;
+    string generated_sql = 3;
+    string explanation = 4;
+    QueryResult result = 5;
+}
+
+message QueryResult {
+    repeated string columns = 1;
+    repeated QueryRow rows = 2;
+    int32 total_rows = 3;
+    double execution_time = 4;
+}
+
+message QueryRow {
+    repeated string values = 1;
+}
+
+// List connections request
+message ListConnectionsRequest {
+    string connection_type = 1; // database, llm, all
+}
+
+// List connections response
+message ListConnectionsResponse {
+    bool success = 1;
+    string error = 2;
+    repeated ConnectionInfo connections = 3;
+}
+
+message ConnectionInfo {
+    string name = 1;
+    string type = 2; // database, llm
+    string status = 3; // connected, disconnected, error
+}
+
+// Health check
+message HealthRequest {}
+
+message HealthResponse {
+    bool healthy = 1;
+    string status = 2;
+}
+
+// InsightPilot service definition
+service InsightPilotService {
+    // Get database schema
+    rpc GetSchema(SchemaRequest) returns (SchemaResponse);
+    
+    // Execute natural language query
+    rpc ExecuteQuery(QueryRequest) returns (QueryResponse);
+    
+    // List available connections
+    rpc ListConnections(ListConnectionsRequest) returns (ListConnectionsResponse);
+    
+    // Health check
+    rpc HealthCheck(HealthRequest) returns (HealthResponse);
+}

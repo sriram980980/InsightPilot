@@ -94,20 +94,15 @@ class ConfigManager:
         """Get default configuration"""
         return {
             "database_connections": {},
-            "llm_settings": {
-                "model": "mistral:7b",
-                "host": "localhost",
-                "port": 11434,
-                "temperature": 0.1,
-                "max_tokens": 1000
-            },
+            "llm_connections": {},
+            "default_llm_connection": None,
             "ui_settings": {
                 "theme": "light",
                 "font_size": 12,
                 "auto_save": True
             },
             "security": {
-                "query_timeout": 30,
+                "query_timeout": 100,
                 "max_rows": 1000,
                 "max_query_history": 100
             },
@@ -162,15 +157,6 @@ class ConfigManager:
             return True
         return False
     
-    def update_llm_settings(self, settings: Dict[str, Any]) -> None:
-        """Update LLM settings"""
-        if "llm_settings" not in self._config:
-            self._config["llm_settings"] = {}
-        
-        self._config["llm_settings"].update(settings)
-        self._save_config()
-        self.logger.info("Updated LLM settings")
-    
     def update_ui_settings(self, settings: Dict[str, Any]) -> None:
         """Update UI settings"""
         if "ui_settings" not in self._config:
@@ -204,10 +190,6 @@ class ConfigManager:
         self._save_config()
         self.logger.info("Configuration reset to defaults")
     
-    def get_llm_settings(self) -> Dict[str, Any]:
-        """Get LLM settings"""
-        return self._config.get("llm_settings", {})
-    
     def get_ui_settings(self) -> Dict[str, Any]:
         """Get UI settings"""
         return self._config.get("ui_settings", {})
@@ -219,4 +201,172 @@ class ConfigManager:
     def get_export_settings(self) -> Dict[str, Any]:
         """Get export settings"""
         return self._config.get("export_settings", {})
+    
+    def get_connections(self) -> Dict[str, Any]:
+        """Get all connections (database and LLM)"""
+        connections = {}
+        
+        # Add database connections
+        db_connections = self._config.get("database_connections", {})
+        connections.update(db_connections)
+        
+        # Add LLM connections
+        llm_connections = self._config.get("llm_connections", {})
+        connections.update(llm_connections)
+        
+        return connections
+    
+    def save_connection(self, name: str, config: Dict[str, Any]) -> None:
+        """Save a connection (database or LLM) with proper typing"""
+        connection_type = config.get("type", "").upper()
+        
+        if connection_type == "DB":
+            # Validate DB connection sub-type
+            sub_type = config.get("sub_type", "").lower()
+            valid_db_subtypes = ["mysql", "mongodb", "postgres"]
+            
+            if sub_type not in valid_db_subtypes:
+                raise ValueError(f"Invalid DB sub_type '{sub_type}'. Must be one of: {valid_db_subtypes}")
+            
+            # Save as database connection
+            if "database_connections" not in self._config:
+                self._config["database_connections"] = {}
+            self._config["database_connections"][name] = config
+            self.logger.info(f"Saved database connection: {name} (type: {connection_type}, sub_type: {sub_type})")
+            
+        elif connection_type == "LLM":
+            # Validate LLM connection sub-type
+            sub_type = config.get("sub_type", "").lower()
+            valid_llm_subtypes = ["openai", "github", "ollama"]
+            
+            if sub_type not in valid_llm_subtypes:
+                raise ValueError(f"Invalid LLM sub_type '{sub_type}'. Must be one of: {valid_llm_subtypes}")
+            
+            # Save as LLM connection
+            if "llm_connections" not in self._config:
+                self._config["llm_connections"] = {}
+            self._config["llm_connections"][name] = config
+            self.logger.info(f"Saved LLM connection: {name} (type: {connection_type}, sub_type: {sub_type})")
+        else:
+            # For backward compatibility with existing connections
+            if connection_type == "LLM" or "model" in config or "provider_type" in config:
+                # Default to github for LLM if no sub_type specified
+                if "sub_type" not in config:
+                    config["sub_type"] = "github"
+                if "llm_connections" not in self._config:
+                    self._config["llm_connections"] = {}
+                self._config["llm_connections"][name] = config
+                self.logger.info(f"Saved LLM connection: {name} (backward compatibility)")
+            else:
+                # Default to mysql for DB if no sub_type specified
+                if "sub_type" not in config:
+                    config["sub_type"] = "mysql"
+                if "database_connections" not in self._config:
+                    self._config["database_connections"] = {}
+                self._config["database_connections"][name] = config
+                self.logger.info(f"Saved database connection: {name} (backward compatibility)")
+        
+        self._save_config()
+    
+    def remove_connection(self, name: str) -> bool:
+        """Remove a connection (database or LLM)"""
+        removed = False
+        
+        # Try to remove from database connections
+        if name in self._config.get("database_connections", {}):
+            del self._config["database_connections"][name]
+            removed = True
+            self.logger.info(f"Removed database connection: {name}")
+        
+        # Try to remove from LLM connections
+        if name in self._config.get("llm_connections", {}):
+            del self._config["llm_connections"][name]
+            removed = True
+            self.logger.info(f"Removed LLM connection: {name}")
+        
+        if removed:
+            self._save_config()
+        
+        return removed
+    
+    def get_llm_connections(self) -> Dict[str, Any]:
+        """Get all LLM connections"""
+        return self._config.get("llm_connections", {})
+    
+    def set_default_llm_connection(self, connection_name: str) -> bool:
+        """Set the default LLM connection"""
+        if connection_name in self._config.get("llm_connections", {}):
+            self._config["default_llm_connection"] = connection_name
+            self._save_config()
+            self.logger.info(f"Set default LLM connection to: {connection_name}")
+            return True
+        return False
+
+    def get_default_llm_connection(self) -> str:
+        """Get the default LLM connection name"""
+        return self._config.get("default_llm_connection", None)
+
+    def get_provider_class_name(self, connection_name: str) -> str:
+        """Get the provider class name based on connection sub_type"""
+        # Check LLM connections first
+        llm_connections = self.get_llm_connections()
+        if connection_name in llm_connections:
+            connection = llm_connections[connection_name]
+            sub_type = connection.get("sub_type", "").lower()
+            
+            # Map LLM sub_types to provider class names
+            llm_provider_map = {
+                "openai": "OpenAIProvider",
+                "github": "GitHubCopilotProvider", 
+                "ollama": "OllamaProvider"
+            }
+            return llm_provider_map.get(sub_type, "UnknownProvider")
+        
+        # Check database connections
+        db_connections = self.get_database_connections()
+        if connection_name in db_connections:
+            connection = db_connections[connection_name]
+            sub_type = connection.get("sub_type", "").lower()
+            
+            # Map DB sub_types to adapter class names
+            db_adapter_map = {
+                "mysql": "MySQLAdapter",
+                "mongodb": "MongoAdapter",
+                "postgres": "PostgreSQLAdapter"
+            }
+            return db_adapter_map.get(sub_type, "UnknownAdapter")
+        
+        return "UnknownProvider"
+
+    def get_provider_module_path(self, connection_name: str) -> str:
+        """Get the provider module path based on connection sub_type"""
+        # Check LLM connections first
+        llm_connections = self.get_llm_connections()
+        if connection_name in llm_connections:
+            connection = llm_connections[connection_name]
+            sub_type = connection.get("sub_type", "").lower()
+            
+            # Map LLM sub_types to module paths
+            llm_module_map = {
+                "openai": "llm.providers.openai_provider",
+                "github": "llm.providers.github_copilot_provider",
+                "ollama": "llm.providers.ollama_provider"
+            }
+            return llm_module_map.get(sub_type, "")
+        
+        # Check database connections
+        db_connections = self.get_database_connections()
+        if connection_name in db_connections:
+            connection = db_connections[connection_name]
+            sub_type = connection.get("sub_type", "").lower()
+            
+            # Map DB sub_types to module paths
+            db_module_map = {
+                "mysql": "adapters.mysql_adapter",
+                "mongodb": "adapters.mongo_adapter", 
+                "postgres": "adapters.postgres_adapter"
+            }
+            return db_module_map.get(sub_type, "")
+        
+        return ""
 

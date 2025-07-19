@@ -3,15 +3,19 @@ Main window for InsightPilot application
 """
 
 import logging
+import os
+from pathlib import Path
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QTabWidget, QMenuBar, QStatusBar, QSplitter,
-    QMessageBox, QApplication
+    QMessageBox, QApplication, QDialog, QLabel
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QIcon
 
 from config.config_manager import ConfigManager
+from .tabs import ConnectionsTab, QueryChatTab, ResultsTab, HistoryTab
+from .dialogs import ConnectionDialog
 
 
 class MainWindow(QMainWindow):
@@ -21,10 +25,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.config_manager = config_manager
         self.client_mode = client_mode
+        self.server_thread = None  # Reference to server thread if running in standalone mode
         self.logger = logging.getLogger(__name__)
         
         self.setWindowTitle("InsightPilot - AI-Powered Data Explorer")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setGeometry(100, 100, 1000, 600)
         
         self.setup_ui()
         self.setup_menu()
@@ -32,6 +37,9 @@ class MainWindow(QMainWindow):
         
         # Load UI settings
         self.load_ui_settings()
+        
+        # Load and apply compact stylesheet
+        self.load_stylesheet()
         
         self.logger.info(f"Main window initialized (client_mode: {client_mode})")
     
@@ -41,6 +49,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         
         layout = QVBoxLayout(central_widget)
+        layout.setContentsMargins(5, 5, 5, 5)  # Reduced margins
+        layout.setSpacing(5)  # Reduced spacing
         
         # Create main splitter
         splitter = QSplitter(Qt.Horizontal)
@@ -48,56 +58,33 @@ class MainWindow(QMainWindow):
         
         # Create tab widget for main content
         self.tab_widget = QTabWidget()
+        self.tab_widget.setTabPosition(QTabWidget.North)
+        self.tab_widget.setDocumentMode(True)  # More compact tabs
         splitter.addWidget(self.tab_widget)
         
-        # Add placeholder tabs (these would be implemented with actual panels)
-        self.add_placeholder_tabs()
+        # Add actual tab implementations
+        self.setup_tabs()
         
         # Set splitter proportions
-        splitter.setSizes([200, 1000])
+        splitter.setSizes([150, 850])  # More compact sidebar
     
-    def add_placeholder_tabs(self):
-        """Add placeholder tabs for MVP demonstration"""
-        # Connection Config Tab
-        config_widget = QWidget()
-        config_layout = QVBoxLayout(config_widget)
-        config_layout.addWidget(self.create_placeholder_label("Database Connection Configuration"))
-        self.tab_widget.addTab(config_widget, "Connections")
+    def setup_tabs(self):
+        """Set up the application tabs"""
+        # Connections Tab
+        self.connections_tab = ConnectionsTab(self.config_manager, self)
+        self.tab_widget.addTab(self.connections_tab, "Connections")
         
-        # Chat Interface Tab
-        chat_widget = QWidget()
-        chat_layout = QVBoxLayout(chat_widget)
-        chat_layout.addWidget(self.create_placeholder_label("Natural Language Query Interface"))
-        self.tab_widget.addTab(chat_widget, "Query Chat")
+        # Query Chat Tab
+        self.query_chat_tab = QueryChatTab(self.config_manager, self)
+        self.tab_widget.addTab(self.query_chat_tab, "Query Chat")
         
         # Results Tab
-        results_widget = QWidget()
-        results_layout = QVBoxLayout(results_widget)
-        results_layout.addWidget(self.create_placeholder_label("Query Results and Visualizations"))
-        self.tab_widget.addTab(results_widget, "Results")
+        self.results_tab = ResultsTab(self.config_manager, self)
+        self.tab_widget.addTab(self.results_tab, "Results")
         
         # History Tab
-        history_widget = QWidget()
-        history_layout = QVBoxLayout(history_widget)
-        history_layout.addWidget(self.create_placeholder_label("Query History and Favorites"))
-        self.tab_widget.addTab(history_widget, "History")
-    
-    def create_placeholder_label(self, text: str):
-        """Create a placeholder label for MVP"""
-        from PySide6.QtWidgets import QLabel
-        label = QLabel(f"[PLACEHOLDER]\n\n{text}\n\nThis panel will be implemented in the full version.")
-        label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet("""
-            QLabel {
-                background-color: #f0f0f0;
-                border: 2px dashed #cccccc;
-                border-radius: 10px;
-                padding: 20px;
-                font-size: 16px;
-                color: #666666;
-            }
-        """)
-        return label
+        self.history_tab = HistoryTab(self.config_manager, self)
+        self.tab_widget.addTab(self.history_tab, "History")
     
     def setup_menu(self):
         """Set up the application menu"""
@@ -138,6 +125,12 @@ class MainWindow(QMainWindow):
         
         mode_text = "Client Mode" if self.client_mode else "Standalone Mode"
         self.status_bar.showMessage(f"Ready - {mode_text}")
+        
+        # Add server status indicator for standalone mode
+        if not self.client_mode:
+            self.server_status_label = QLabel("Server: Starting!")
+            self.server_status_label.setStyleSheet("color: orange; font-weight: bold;")
+            self.status_bar.addPermanentWidget(self.server_status_label)
     
     def load_ui_settings(self):
         """Load UI settings from configuration"""
@@ -182,13 +175,53 @@ class MainWindow(QMainWindow):
         font.setPointSize(font_size)
         self.setFont(font)
     
+    def load_stylesheet(self):
+        """Load and apply the enhanced stylesheet"""
+        try:
+            # Try enhanced stylesheet first
+            style_path = Path(__file__).parent / "style_enhanced.qss"
+            if style_path.exists():
+                with open(style_path, 'r', encoding='utf-8') as f:
+                    stylesheet = f.read()
+                self.setStyleSheet(stylesheet)
+                self.logger.info("Enhanced stylesheet loaded successfully")
+            else:
+                # Fallback to original stylesheet
+                style_path = Path(__file__).parent / "style.qss"
+                if style_path.exists():
+                    with open(style_path, 'r', encoding='utf-8') as f:
+                        stylesheet = f.read()
+                    self.setStyleSheet(stylesheet)
+                    self.logger.info("Fallback stylesheet loaded successfully")
+                else:
+                    self.logger.warning("No stylesheet file found")
+        except Exception as e:
+            self.logger.warning(f"Failed to load stylesheet: {e}")
+    
     def new_connection(self):
         """Handle new connection action"""
-        QMessageBox.information(
-            self, 
-            "New Connection", 
-            "New connection dialog would open here.\n\nThis will be implemented in the full version."
-        )
+        dialog = ConnectionDialog(self.config_manager, parent=self)
+        if dialog.exec() == QDialog.Accepted:
+            # Refresh the connections tab
+            if hasattr(self, 'connections_tab'):
+                self.connections_tab.refresh_connections()
+            
+            # Notify other tabs of connection changes
+            self.on_connections_changed()
+            
+            QMessageBox.information(
+                self,
+                "Connection Saved",
+                "Database connection has been saved successfully."
+            )
+    
+    def on_connections_changed(self):
+        """Handle connection configuration changes"""
+        # Refresh any tabs that depend on connection configuration
+        if hasattr(self, 'query_chat_tab'):
+            self.query_chat_tab.refresh_connections()
+        if hasattr(self, 'connections_tab'):
+            self.connections_tab.refresh_connections()
     
     def show_settings(self):
         """Show settings dialog"""
@@ -220,4 +253,15 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """Handle window close event"""
         self.logger.info("Application closing")
+        
+        # Stop server thread if running
+        if hasattr(self, 'server_thread') and self.server_thread and self.server_thread.isRunning():
+            self.logger.info("Stopping gRPC server thread!")
+            # Try graceful shutdown first
+            if hasattr(self.server_thread, 'stop_server'):
+                self.server_thread.stop_server()
+            # Then terminate the thread
+            self.server_thread.terminate()
+            self.server_thread.wait(5000)  # Wait up to 5 seconds for clean shutdown
+            
         event.accept()

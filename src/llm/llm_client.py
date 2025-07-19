@@ -1,27 +1,21 @@
 """
-LLM client for Ollama integration
+LLM client for Ollama integration and multi-provider support
 """
 
 import json
 import logging
 import requests
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
-
-@dataclass
-class LLMResponse:
-    """LLM response structure"""
-    content: str
-    success: bool
-    error: Optional[str] = None
-    model: Optional[str] = None
-    tokens_used: Optional[int] = None
-    response_time: Optional[float] = None
+# Import enhanced client components
+from .providers.base_provider import LLMResponse
+from .enhanced_llm_client import EnhancedLLMClient
+from .llm_factory import LLMClientFactory
 
 
 class LLMClient:
-    """Client for communicating with Ollama LLM server"""
+    """Legacy LLM client for backward compatibility"""
     
     def __init__(self, host: str = "localhost", port: int = 11434, model: str = "mistral:7b"):
         self.host = host
@@ -38,6 +32,43 @@ class LLMClient:
             "stop": ["</s>", "###"]
         }
     
+    def generate_sql(self, schema_info: str, question: str) -> LLMResponse:
+        """Generate SQL query from schema and question using LLM"""
+        from .prompt_builder import PromptBuilder
+        prompt_builder = PromptBuilder()
+        prompt = prompt_builder.build_sql_prompt(schema_info, question)
+        return self.generate(prompt)
+
+    def generate_sql_custom_prompt(self, custom_prompt: str) -> LLMResponse:
+        """Generate SQL query using a custom prompt (for retry scenarios)"""
+        return self.generate(custom_prompt)
+
+    def generate_mongodb_query(self, schema_info: str, question: str) -> LLMResponse:
+        """Generate MongoDB aggregation query from schema and question using LLM"""
+        from .prompt_builder import PromptBuilder
+        prompt_builder = PromptBuilder()
+        prompt = prompt_builder.build_mongodb_prompt(schema_info, question)
+        return self.generate(prompt)
+
+    def recommend_chart(self, columns: List[str], sample_data: List[List[Any]], question: str, user_hint: str = "") -> LLMResponse:
+        """Ask LLM to recommend the best chart type for the data"""
+        from .prompt_builder import PromptBuilder
+        prompt_builder = PromptBuilder()
+        prompt = prompt_builder.build_chart_recommendation_prompt(columns, sample_data, question, user_hint)
+        return self.generate(prompt)
+
+    def explain_query(self, query: str) -> LLMResponse:
+        """Ask LLM to explain the generated query"""
+        from .prompt_builder import PromptBuilder
+        prompt_builder = PromptBuilder()
+        prompt = prompt_builder.build_explain_prompt(query)
+        return self.generate(prompt)
+        from .prompt_builder import PromptBuilder
+        prompt_builder = PromptBuilder()
+        prompt = prompt_builder.build_explain_prompt(query)
+        return self.generate(prompt)
+    
+    # Ollama-specific implementation methods
     def health_check(self) -> bool:
         """Check if Ollama server is running"""
         try:
@@ -90,7 +121,7 @@ class LLMClient:
             response = requests.post(
                 f"{self.base_url}/api/generate",
                 json=payload,
-                timeout=60
+                timeout=180  # Increased timeout for long LLM generations
             )
             response.raise_for_status()
             
@@ -99,7 +130,8 @@ class LLMClient:
                 content=data.get("response", ""),
                 success=True,
                 model=data.get("model"),
-                tokens_used=data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
+                tokens_used=data.get("prompt_eval_count", 0) + data.get("eval_count", 0),
+                provider="ollama"
             )
             
         except Exception as e:
@@ -107,7 +139,8 @@ class LLMClient:
             return LLMResponse(
                 content="",
                 success=False,
-                error=str(e)
+                error=str(e),
+                provider="ollama"
             )
     
     def update_model(self, model_name: str) -> bool:
@@ -143,3 +176,14 @@ class LLMClient:
         except requests.RequestException as e:
             self.logger.error(f"Failed to get model info for {target_model}: {e}")
             return {}
+
+
+# Factory function for creating appropriate LLM client
+def create_llm_client(config_manager=None, legacy_mode=False) -> Any:
+    """Create an LLM client instance"""
+    if legacy_mode or config_manager is None:
+        # Return legacy Ollama-only client
+        return LLMClient()
+    else:
+        # Return enhanced multi-provider client
+        return LLMClientFactory.create_from_config(config_manager)

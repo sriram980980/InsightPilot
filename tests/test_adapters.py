@@ -129,11 +129,28 @@ class TestMySQLAdapter:
             "UPDATE users SET name = 'test'",
             "DELETE FROM users",
             "INSERT INTO users VALUES (1, 'test')",
-            "DROP TABLE users"
+            "DROP TABLE users",
+            # Invalid LIMIT clauses
+            "SELECT * FROM users LIMIT 2 * (SELECT COUNT(*) FROM department)",
+            "SELECT * FROM users LIMIT (SELECT COUNT(*) FROM department)",
+            "SELECT * FROM users LIMIT 10 + 5",
+            "SELECT * FROM users LIMIT 2*3"
         ]
         
         for query in unsafe_queries:
             assert self.adapter.validate_query(query) is False
+
+    def test_validate_query_valid_limit(self):
+        """Test query validation for valid LIMIT clauses"""
+        valid_limit_queries = [
+            "SELECT * FROM users LIMIT 100",
+            "SELECT * FROM users LIMIT 1000",
+            "SELECT id, name FROM users WHERE status = 'active' LIMIT 50",
+            "SELECT COUNT(*) FROM orders LIMIT 1"
+        ]
+        
+        for query in valid_limit_queries:
+            assert self.adapter.validate_query(query) is True
 
 
 class TestOracleAdapter:
