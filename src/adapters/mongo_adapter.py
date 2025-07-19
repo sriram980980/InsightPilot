@@ -128,31 +128,11 @@ class MongoAdapter(BaseDBAdapter):
         if not self._connected:
             raise ConnectionError("Not connected to MongoDB database")
         
-        # For MongoDB, we expect aggregation pipeline as query
-        # This is a simplified implementation
         start_time = time.time()
         
         try:
-            # Parse query to extract collection and aggregation pipeline
-            # This is a basic implementation - in practice, you'd want more sophisticated parsing
-            query_parts = query.strip().split('.')
-            if len(query_parts) < 2:
-                raise ValueError("Invalid MongoDB query format")
-            
-            collection_name = query_parts[0]
-            operation = query_parts[1]
-            
-            collection = self.db[collection_name]
-            
-            if operation.startswith('find'):
-                # Handle find operations
-                results = list(collection.find().limit(1000))
-            elif operation.startswith('aggregate'):
-                # Handle aggregation operations
-                # This would need proper pipeline parsing
-                results = list(collection.aggregate([]))
-            else:
-                raise ValueError(f"Unsupported MongoDB operation: {operation}")
+            # Parse query to extract collection and operation
+            results = self._parse_and_execute_query(query)
             
             execution_time = time.time() - start_time
             
@@ -161,20 +141,29 @@ class MongoAdapter(BaseDBAdapter):
                 # Get all unique fields from results
                 all_fields = set()
                 for doc in results:
-                    all_fields.update(doc.keys())
+                    if isinstance(doc, dict):
+                        all_fields.update(doc.keys())
                 
-                columns = sorted(all_fields)
+                columns = sorted(all_fields) if all_fields else ["result"]
                 rows = []
                 
-                for doc in results:
-                    row = []
-                    for field in columns:
-                        value = doc.get(field, None)
-                        # Convert complex types to strings
-                        if isinstance(value, (dict, list)):
-                            value = str(value)
-                        row.append(value)
-                    rows.append(row)
+                if all_fields:
+                    # Normal document results
+                    for doc in results:
+                        row = []
+                        for field in columns:
+                            value = doc.get(field, None)
+                            # Convert complex types to strings
+                            if isinstance(value, (dict, list)):
+                                value = str(value)
+                            elif value is None:
+                                value = ""
+                            row.append(value)
+                        rows.append(row)
+                else:
+                    # Simple value results (e.g., count)
+                    for result in results:
+                        rows.append([str(result)])
                 
                 return QueryResult(
                     columns=columns,
@@ -184,13 +173,13 @@ class MongoAdapter(BaseDBAdapter):
                 )
             else:
                 return QueryResult(
-                    columns=[],
-                    rows=[],
+                    columns=["result"],
+                    rows=[["No results found"]],
                     row_count=0,
                     execution_time=execution_time
                 )
             
-        except PyMongoError as e:
+        except Exception as e:
             self.logger.error(f"MongoDB query execution error: {e}")
             return QueryResult(
                 columns=[],
@@ -199,6 +188,81 @@ class MongoAdapter(BaseDBAdapter):
                 execution_time=time.time() - start_time,
                 error=str(e)
             )
+    
+    def _parse_and_execute_query(self, query: str) -> List[Any]:
+        """Parse and execute MongoDB query"""
+        import json
+        import re
+        
+        # Handle different query formats
+        if query.startswith('{') or query.startswith('['):
+            # Direct aggregation pipeline or find query
+            try:
+                pipeline = json.loads(query)
+                # Assume it's for the first collection found in schema
+                collections = self.db.list_collection_names()
+                if collections:
+                    collection = self.db[collections[0]]
+                    if isinstance(pipeline, list):
+                        return list(collection.aggregate(pipeline))
+                    else:
+                        return list(collection.find(pipeline).limit(1000))
+            except json.JSONDecodeError:
+                raise ValueError(f"Invalid JSON query: {query}")
+        
+        # Parse collection.operation format
+        parts = query.split('.')
+        if len(parts) < 2:
+            raise ValueError(f"Invalid MongoDB query format: {query}")
+        
+        collection_name = parts[0]
+        operation_with_params = '.'.join(parts[1:])
+        
+        # Extract operation and parameters
+        operation_match = re.match(r'(\w+)(?:\((.*)\))?', operation_with_params, re.DOTALL)
+        if not operation_match:
+            raise ValueError(f"Could not parse operation: {operation_with_params}")
+        
+        operation = operation_match.group(1)
+        params_str = operation_match.group(2) if operation_match.group(2) else ""
+        
+        collection = self.db[collection_name]
+        
+        if operation == 'find':
+            if params_str:
+                try:
+                    params = json.loads(params_str)
+                    return list(collection.find(params).limit(1000))
+                except json.JSONDecodeError:
+                    return list(collection.find().limit(1000))
+            else:
+                return list(collection.find().limit(1000))
+        
+        elif operation == 'aggregate':
+            if params_str:
+                try:
+                    pipeline = json.loads(params_str)
+                    if not isinstance(pipeline, list):
+                        pipeline = [pipeline]
+                    return list(collection.aggregate(pipeline))
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"Failed to parse aggregation pipeline: {e}")
+                    # Fall back to simple aggregation
+                    return list(collection.aggregate([{"$limit": 1000}]))
+            else:
+                # Simple aggregation to get all documents
+                return list(collection.aggregate([{"$limit": 1000}]))
+        
+        elif operation == 'count':
+            count_result = collection.count_documents({})
+            return [{"count": count_result}]
+        
+        elif operation == 'findOne':
+            result = collection.find_one()
+            return [result] if result else []
+        
+        else:
+            raise ValueError(f"Unsupported MongoDB operation: {operation}")
     
     def validate_query(self, query: str) -> bool:
         """Validate MongoDB query for safety"""

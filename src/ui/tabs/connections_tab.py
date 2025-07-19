@@ -112,7 +112,7 @@ class ConnectionsTab(QWidget):
         # Buttons
         button_layout = QHBoxLayout()
         
-        self.new_db_btn = QPushButton("New Database")
+        self.new_db_btn = QPushButton("New DB Connection")
         self.edit_btn = QPushButton("Edit")
         self.delete_btn = QPushButton("Delete")
         self.test_btn = QPushButton("Test Connection")
@@ -213,10 +213,9 @@ class ConnectionsTab(QWidget):
         self.test_btn.setEnabled(has_selection)
     
     def new_connection(self):
-        """Handle new connection button click"""
-        # This will be handled by the main window
-        if hasattr(self.parent(), 'new_connection'):
-            self.parent().new_connection()
+        """Handle new connection button click - for backwards compatibility"""
+        # This method is kept for backwards compatibility but now directly opens DB connection dialog
+        self.new_db_connection()
     
     def edit_connection(self):
         """Handle edit connection button click"""
@@ -397,7 +396,18 @@ class ConnectionsTab(QWidget):
     
     def new_db_connection(self):
         """Create a new database connection"""
-        self.new_connection()
+        dialog = ConnectionDialog(self.config_manager, parent=self)
+        if dialog.exec() == QDialog.Accepted:
+            self.load_connections()
+            QMessageBox.information(
+                self,
+                "Connection Saved",
+                "Database connection has been saved successfully."
+            )
+            
+            # Notify parent window of connection changes
+            if self.parent() and hasattr(self.parent(), 'on_connections_changed'):
+                self.parent().on_connections_changed()
     
     def new_llm_connection(self):
         """Create a new LLM connection"""

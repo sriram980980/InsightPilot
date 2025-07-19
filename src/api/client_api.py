@@ -304,7 +304,7 @@ class ClientAPI:
                 report_progress(f"Schema analysis complete! Found {len(schema)} tables")
                 
                 schema_info = self.prompt_builder.format_schema_info(schema)
-                self.logger.info(f"Retrieved schema for {request.database_name}: {len(schema)} tables")
+                self.logger.info(f"Retrieved schema for {request.database_name}: {schema} tables")
                 
             except Exception as schema_error:
                 self.logger.error(f"Failed to retrieve schema: {schema_error}")
@@ -370,7 +370,7 @@ class ClientAPI:
                 generated_query = self._clean_generated_query(generated_query)
                 
                 report_progress(f"Query generated successfully!")
-                report_progress(f"Generated Query: {generated_query[:100]}{'...' if len(generated_query) > 100 else ''}")
+                report_progress(f"Generated Query: {generated_query[:1000]}{'...' if len(generated_query) > 1000 else ''}")
                 
                 self.logger.info(f"Generated SQL query: {generated_query}")
                 
@@ -431,7 +431,7 @@ class ClientAPI:
                                 try:
                                     sanitized_query = adapter.sanitize_query(retry_query)
                                     generated_query = retry_query  # Update the generated query for final response
-                                    report_progress(f"Improved query: {retry_query[:100]}{'...' if len(retry_query) > 100 else ''}")
+                                    report_progress(f"Improved query: {retry_query[:1000]}{'...' if len(retry_query) > 1000 else ''}")
                                     retry_count += 1
                                     continue  # Try again with the new query
                                 except ValueError:
@@ -600,7 +600,16 @@ Generate only the corrected SQL query without any additional text:"""
     def _clean_generated_query(self, generated_query: str) -> str:
         """Clean up the generated query by removing markdown and explanatory text"""
         # Clean up the generated query (remove markdown formatting if present)
-        if "```sql" in generated_query:
+        if "```javascript" in generated_query or "```mongodb" in generated_query:
+            # Extract MongoDB JavaScript from markdown code block
+            if "```javascript" in generated_query:
+                start_idx = generated_query.find("```javascript") + 13
+            else:
+                start_idx = generated_query.find("```mongodb") + 10
+            end_idx = generated_query.find("```", start_idx)
+            if end_idx > start_idx:
+                generated_query = generated_query[start_idx:end_idx].strip()
+        elif "```sql" in generated_query:
             # Extract SQL from markdown code block
             start_idx = generated_query.find("```sql") + 6
             end_idx = generated_query.find("```", start_idx)
@@ -612,6 +621,10 @@ Generate only the corrected SQL query without any additional text:"""
             end_idx = generated_query.find("```", start_idx)
             if end_idx > start_idx:
                 generated_query = generated_query[start_idx:end_idx].strip()
+        
+        # Handle MongoDB queries specifically
+        if "db." in generated_query:
+            return self._clean_mongodb_query(generated_query)
         
         # Remove any explanatory text before/after the SQL
         lines = generated_query.split('\n')
@@ -631,6 +644,71 @@ Generate only the corrected SQL query without any additional text:"""
             generated_query = ' '.join(sql_lines)
             
         return generated_query
+    
+    def _clean_mongodb_query(self, generated_query: str) -> str:
+        """Clean up MongoDB specific queries"""
+        import re
+        import json
+        
+        # Remove JavaScript comments
+        lines = generated_query.split('\n')
+        cleaned_lines = []
+        
+        for line in lines:
+            # Remove inline comments
+            if '//' in line:
+                line = line[:line.find('//')]
+            line = line.strip()
+            if line:
+                cleaned_lines.append(line)
+        
+        query = ' '.join(cleaned_lines)
+        
+        # Remove semicolon at the end if present
+        query = query.rstrip(';')
+        
+        # Extract collection name and operation
+        # Pattern: db.collection.operation(...)
+        match = re.match(r'db\.(\w+)\.(\w+)\((.*)\)', query, re.DOTALL)
+        if match:
+            collection = match.group(1)
+            operation = match.group(2)
+            params = match.group(3).strip()
+            
+            if operation == 'aggregate':
+                # Extract the aggregation pipeline
+                try:
+                    # Try to parse the aggregation pipeline as JSON
+                    # Remove extra whitespace and format for JSON parsing
+                    params = re.sub(r'\s+', ' ', params)
+                    
+                    # Handle JavaScript object notation vs JSON
+                    # Replace unquoted keys with quoted keys for JSON compatibility
+                    params = re.sub(r'(\w+):', r'"\1":', params)
+                    
+                    # Parse as JSON to validate
+                    pipeline = json.loads(params)
+                    
+                    # Return a simplified format for the adapter
+                    return f"{collection}.aggregate({json.dumps(pipeline)})"
+                    
+                except (json.JSONDecodeError, ValueError) as e:
+                    self.logger.warning(f"Could not parse MongoDB aggregation pipeline: {e}")
+                    # Fall back to simple format
+                    return f"{collection}.aggregate"
+            
+            elif operation in ['find', 'findOne']:
+                # Handle find operations
+                return f"{collection}.find({params})" if params else f"{collection}.find"
+            
+            elif operation == 'count':
+                return f"{collection}.count"
+            
+            else:
+                return f"{collection}.{operation}"
+        
+        # If pattern doesn't match, return as is
+        return query
     
     def cleanup_old_history(self, days_to_keep: int = 30) -> int:
         """Clean up old query history"""
