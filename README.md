@@ -2,10 +2,12 @@
 
 > **AI-Powered Data Explorer** - Transform your natural language questions into powerful database insights with zero SQL knowledge required.
 
+> ⚠️ **PROOF OF CONCEPT (POC)** - This is a demonstration version. No authentication or access control is implemented. Do not use with production data or in production environments.
+
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
 [![PySide6](https://img.shields.io/badge/PySide6-GUI-green.svg)](https://doc.qt.io/qtforpython/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
+[![Status](https://img.shields.io/badge/Status-POC-orange.svg)]()
 
 ## ✨ What is InsightPilot?
 
@@ -42,8 +44,10 @@ InsightPilot revolutionizes how you interact with your data. Simply ask question
 ### 🔒 **Enterprise-Ready Security**
 - **Secure Connections**: Encrypted database connections
 - **Query Sanitization**: Prevents SQL injection attacks
-- **Access Control**: Configurable database permissions
+- **Query Validation**: Built-in safety checks prevent dangerous operations
 - **Audit Trail**: Complete query history and logging
+
+> ⚠️ **POC LIMITATION**: This proof of concept does not include user authentication, access control, or user management features. All users have the same level of access.
 
 ---
 
@@ -83,10 +87,12 @@ graph TB
 
 ## 🚀 Quick Start
 
+> ⚠️ **IMPORTANT**: This is a Proof of Concept. Do not connect to production databases or use with sensitive data. No authentication is implemented.
+
 ### 📋 Prerequisites
 
 - **Python 3.8+** installed on your system
-- **Database access** to MySQL, Oracle, or MongoDB
+- **Database access** to MySQL, Oracle, or MongoDB (TEST DATABASES ONLY)
 - **4GB RAM** minimum (8GB recommended for local LLM)
 
 ### ⚡ Installation
@@ -294,10 +300,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### 📊 **Current Status**
 
-![Version](https://img.shields.io/badge/Version-1.1.0-blue.svg)
-![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)
+![Version](https://img.shields.io/badge/Version-1.1.0--POC-orange.svg)
+![Build](https://img.shields.io/badge/Build-POC-orange.svg)
 ![Coverage](https://img.shields.io/badge/Coverage-85%25-green.svg)
-![Downloads](https://img.shields.io/badge/Downloads-1K+-purple.svg)
+![Status](https://img.shields.io/badge/Status-Proof%20of%20Concept-orange.svg)
+
+> **Note**: This is a Proof of Concept version. Features like user authentication, role-based access control, and production-grade security are not implemented.
 
 ---
 
@@ -337,10 +345,14 @@ Each adapter:
 
 ## 🔐 Configuration + Security
 
+> ⚠️ **POC SECURITY NOTICE**: This proof of concept implements basic security measures but lacks comprehensive authentication and authorization. Suitable for demonstration and testing purposes only.
+
 * Config stored in encrypted file (AES-256)
 * Windows Credential Store used to decrypt key material
 * Only schema metadata is cached, no raw data persisted
 * Query limits enforced: max 1000 rows or 24h time window
+* **NO USER AUTHENTICATION**: All users have identical access levels
+* **NO ACCESS CONTROL**: Database permissions are inherited from connection credentials
 * Cluster nodes use mutual TLS (optional for server mode)
 
 ## 🧱 Implementation Steps
