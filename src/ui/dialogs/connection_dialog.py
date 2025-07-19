@@ -330,10 +330,29 @@ class ConnectionDialog(QDialog):
     
     def clear_db_specific_fields(self):
         """Clear database-specific fields"""
-        while self.db_specific_layout.count():
+        # Clear widget references first
+        if hasattr(self, 'mysql_schema_edit'):
+            delattr(self, 'mysql_schema_edit')
+        if hasattr(self, 'oracle_service_edit'):
+            delattr(self, 'oracle_service_edit')
+        if hasattr(self, 'oracle_conn_type'):
+            delattr(self, 'oracle_conn_type')
+        if hasattr(self, 'mongo_database_edit'):
+            delattr(self, 'mongo_database_edit')
+        if hasattr(self, 'mongo_auth_db_edit'):
+            delattr(self, 'mongo_auth_db_edit')
+        if hasattr(self, 'postgres_database_edit'):
+            delattr(self, 'postgres_database_edit')
+        if hasattr(self, 'postgres_schema_edit'):
+            delattr(self, 'postgres_schema_edit')
+        
+        # Remove and delete widgets from layout
+        while self.db_specific_layout.count() > 0:
             child = self.db_specific_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
+            if child and child.widget():
+                widget = child.widget()
+                widget.setParent(None)
+                widget.deleteLater()
     
     def setup_mysql_fields(self):
         """Set up MySQL-specific fields"""
@@ -427,34 +446,17 @@ class ConnectionDialog(QDialog):
             'enabled': True  # Default to enabled
         }
         
+        # Only access database-specific fields for the current database type
         if db_type == 'MySQL':
-            if hasattr(self, 'mysql_schema_edit'):
-                config['database'] = self.mysql_schema_edit.text()
-            else:
-                config['database'] = ''
+            config['database'] = getattr(self, 'mysql_schema_edit', QLineEdit()).text()
         elif db_type == 'Oracle':
-            if hasattr(self, 'oracle_service_edit'):
-                config['service_name'] = self.oracle_service_edit.text()
-            else:
-                config['service_name'] = ''
+            config['service_name'] = getattr(self, 'oracle_service_edit', QLineEdit()).text()
         elif db_type == 'MongoDB':
-            if hasattr(self, 'mongo_database_edit'):
-                config['database'] = self.mongo_database_edit.text()
-            else:
-                config['database'] = ''
-            if hasattr(self, 'mongo_auth_db_edit'):
-                config['auth_database'] = self.mongo_auth_db_edit.text()
-            else:
-                config['auth_database'] = 'admin'
+            config['database'] = getattr(self, 'mongo_database_edit', QLineEdit()).text()
+            config['auth_database'] = getattr(self, 'mongo_auth_db_edit', QLineEdit()).text() or 'admin'
         elif db_type == 'PostgreSQL':
-            if hasattr(self, 'postgres_database_edit'):
-                config['database'] = self.postgres_database_edit.text()
-            else:
-                config['database'] = 'postgres'
-            if hasattr(self, 'postgres_schema_edit'):
-                config['schema'] = self.postgres_schema_edit.text()
-            else:
-                config['schema'] = 'public'
+            config['database'] = getattr(self, 'postgres_database_edit', QLineEdit()).text() or 'postgres'
+            config['schema'] = getattr(self, 'postgres_schema_edit', QLineEdit()).text() or 'public'
         
         return config
     
