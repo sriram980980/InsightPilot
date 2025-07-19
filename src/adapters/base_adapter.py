@@ -98,17 +98,20 @@ class BaseDBAdapter(ABC):
         cleaned_query = remove_comments(query)
         # Remove string literals (single/double quotes)
         cleaned_query = re.sub(r"'[^']*'", "", cleaned_query)
-        cleaned_query = re.sub(r'"[^"]*"', "", cleaned_query)
+        cleaned_query = re.sub(r'"[^\"]*"', "", cleaned_query)
 
-        # Check for dangerous keywords as whole words (case-insensitive)
+        # Normalize whitespace and uppercase for easier matching
+        cleaned_query = cleaned_query.lstrip()  # Remove leading whitespace
+        upper_query = cleaned_query.upper()
+
+        # Check for dangerous keywords at the start of the query
         dangerous_keywords = [
             'DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE',
             'TRUNCATE', 'REPLACE', 'GRANT', 'REVOKE', 'SET', 'SHOW'
         ]
         for keyword in dangerous_keywords:
-            # Match only if keyword is a whole word (not part of another word)
-            if re.search(rf"\\b{keyword}\\b", cleaned_query, re.IGNORECASE):
-                raise ValueError(f"Dangerous SQL keyword '{keyword}' detected in query.")
+            if upper_query.startswith(keyword):
+                raise ValueError(f"Dangerous SQL keyword '{keyword}' detected in query.'{query}'")
 
         return query.strip()
     

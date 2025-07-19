@@ -5,7 +5,7 @@ LLM client for Ollama integration
 import json
 import logging
 import requests
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
 
@@ -28,11 +28,22 @@ class LLMClient:
         prompt = prompt_builder.build_sql_prompt(schema_info, question)
         return self.generate(prompt)
 
+    def generate_sql_custom_prompt(self, custom_prompt: str) -> LLMResponse:
+        """Generate SQL query using a custom prompt (for retry scenarios)"""
+        return self.generate(custom_prompt)
+
     def generate_mongodb_query(self, schema_info: str, question: str) -> LLMResponse:
         """Generate MongoDB aggregation query from schema and question using LLM"""
         from llm.prompt_builder import PromptBuilder
         prompt_builder = PromptBuilder()
         prompt = prompt_builder.build_mongodb_prompt(schema_info, question)
+        return self.generate(prompt)
+
+    def recommend_chart(self, columns: List[str], sample_data: List[List[Any]], question: str, user_hint: str = "") -> LLMResponse:
+        """Ask LLM to recommend the best chart type for the data"""
+        from llm.prompt_builder import PromptBuilder
+        prompt_builder = PromptBuilder()
+        prompt = prompt_builder.build_chart_recommendation_prompt(columns, sample_data, question, user_hint)
         return self.generate(prompt)
 
     def explain_query(self, query: str) -> LLMResponse:

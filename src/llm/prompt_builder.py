@@ -23,18 +23,28 @@ class PromptBuilder:
 ### RULES ###
 1. Only generate SELECT queries
 2. Do not use any DDL or DML operations (CREATE, DROP, INSERT, UPDATE, DELETE)
-3. Use proper SQL syntax and formatting
+3. Use proper SQL syntax and formatting compatible with MySQL
 4. Include appropriate WHERE clauses for filtering
 5. Use JOINs when needed to relate tables
 6. Add LIMIT clauses to prevent large result sets (max 1000 rows)
 7. Use proper aggregate functions (COUNT, SUM, AVG, etc.) when appropriate
 8. Always use table aliases for better readability
+9. When calculating percentages, use subqueries in the SELECT clause, not in nested FROM clauses
+10. Avoid complex nested subqueries that reference group functions from outer queries
+11. Use HAVING clause instead of WHERE for filtering on aggregate functions
+12. For percentage calculations, calculate totals in separate subqueries
+
+### MYSQL SPECIFIC GUIDELINES ###
+- Use backticks around table/column names if they contain special characters
+- For percentage calculations, structure queries like: (value / (SELECT SUM(column) FROM table)) * 100
+- Avoid referencing aggregate function results by alias in the same query level
+- Use proper GROUP BY clauses for all non-aggregate columns in SELECT
 
 ### QUESTION ###
 {question}
 
 ### SQL QUERY ###
-"""
+Generate only the SQL query without any additional text or formatting:"""
         return prompt
     
     def build_mongodb_prompt(self, schema_info: str, question: str) -> str:
@@ -150,5 +160,49 @@ Solution:
 2. Bottlenecks Identified:
 3. Optimization Recommendations:
 4. Optimized Query (if applicable):
+"""
+        return prompt
+    
+    def build_chart_recommendation_prompt(self, columns: List[str], sample_data: List[List[Any]], question: str, user_hint: str = "") -> str:
+        """Build prompt for chart type recommendation"""
+        # Format sample data for the prompt
+        data_preview = ""
+        if sample_data:
+            data_preview = "Sample Data (first 5 rows):\n"
+            for i, row in enumerate(sample_data[:5]):
+                data_preview += f"Row {i+1}: {dict(zip(columns, row))}\n"
+        
+        user_hint_text = f"\n### USER PREFERENCE ###\n{user_hint}\n" if user_hint.strip() else ""
+        
+        prompt = f"""You are an expert data visualization consultant. Given the query result data and the original question, recommend the most appropriate chart type and provide configuration details.
+
+### QUERY CONTEXT ###
+Original Question: {question}
+
+### DATA STRUCTURE ###
+Columns: {columns}
+Number of columns: {len(columns)}
+{data_preview}
+{user_hint_text}
+### AVAILABLE CHART TYPES ###
+- bar: For categorical comparisons
+- line: For trends over time or continuous data
+- pie: For part-to-whole relationships (max 8 categories)
+- scatter: For correlation between two numeric variables
+- histogram: For distribution of single numeric variable
+- table: For detailed data viewing
+
+### INSTRUCTIONS ###
+Respond ONLY with a JSON object containing:
+{{
+    "chart_type": "recommended_type",
+    "reasoning": "why this chart type is best",
+    "x_column": "column_name_for_x_axis",
+    "y_column": "column_name_for_y_axis", 
+    "title": "suggested_chart_title",
+    "considerations": ["any_important_notes"]
+}}
+
+### CHART RECOMMENDATION ###
 """
         return prompt

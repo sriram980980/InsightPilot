@@ -382,3 +382,315 @@ class ChartRenderer:
         except Exception as e:
             self.logger.error(f"Error saving chart: {e}")
             return False
+    
+    def render_chart_with_recommendation(self, fig, result: QueryResult, recommendation: Dict[str, Any] = None) -> bool:
+        """Render chart using LLM recommendation"""
+        chart_type = recommendation.get("chart_type", "bar") if recommendation else "bar"
+        
+        try:
+            if chart_type == "bar":
+                return self._render_bar_chart_enhanced(fig, result, recommendation)
+            elif chart_type == "line":
+                return self._render_line_chart_enhanced(fig, result, recommendation)
+            elif chart_type == "pie":
+                return self._render_pie_chart_enhanced(fig, result, recommendation)
+            elif chart_type == "scatter":
+                return self._render_scatter_chart_enhanced(fig, result, recommendation)
+            elif chart_type == "histogram":
+                return self._render_histogram_enhanced(fig, result, recommendation)
+            else:
+                return False
+        except Exception as e:
+            self.logger.error(f"Chart rendering error: {e}")
+            return False
+    
+    def _render_bar_chart_enhanced(self, fig, result: QueryResult, recommendation: Dict[str, Any] = None) -> bool:
+        """Enhanced bar chart with LLM recommendation support"""
+        try:
+            ax = fig.add_subplot(111)
+            
+            # Determine x and y columns
+            if recommendation:
+                x_col = recommendation.get('x_column', result.columns[0])
+                y_col = recommendation.get('y_column', result.columns[1] if len(result.columns) > 1 else result.columns[0])
+                title = recommendation.get('title', 'Bar Chart')
+            else:
+                x_col = result.columns[0]
+                y_col = result.columns[1] if len(result.columns) > 1 else result.columns[0]
+                title = 'Bar Chart'
+            
+            # Get column indices
+            x_idx = result.columns.index(x_col) if x_col in result.columns else 0
+            y_idx = result.columns.index(y_col) if y_col in result.columns else (1 if len(result.columns) > 1 else 0)
+            
+            # Extract data
+            x_data = [row[x_idx] for row in result.rows]
+            y_data = [float(row[y_idx]) if row[y_idx] is not None else 0 for row in result.rows]
+            
+            # Limit to top 20 items for readability
+            if len(x_data) > 20:
+                # Sort by y_data and take top 20
+                combined = list(zip(x_data, y_data))
+                combined.sort(key=lambda x: x[1], reverse=True)
+                x_data, y_data = zip(*combined[:20])
+            
+            # Create bar chart
+            bars = ax.bar(range(len(x_data)), y_data, color='steelblue', alpha=0.8)
+            
+            # Customize
+            ax.set_xlabel(x_col)
+            ax.set_ylabel(y_col)
+            ax.set_title(title)
+            ax.set_xticks(range(len(x_data)))
+            ax.set_xticklabels([str(x)[:15] + '...' if len(str(x)) > 15 else str(x) for x in x_data], rotation=45, ha='right')
+            
+            # Add value labels on bars
+            for i, bar in enumerate(bars):
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{height:.1f}' if height != int(height) else f'{int(height)}',
+                       ha='center', va='bottom', fontsize=8)
+            
+            ax.grid(True, alpha=0.3)
+            fig.tight_layout()
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Bar chart error: {e}")
+            return False
+    
+    def _render_line_chart_enhanced(self, fig, result: QueryResult, recommendation: Dict[str, Any] = None) -> bool:
+        """Enhanced line chart with LLM recommendation support"""
+        try:
+            ax = fig.add_subplot(111)
+            
+            # Determine columns
+            if recommendation:
+                x_col = recommendation.get('x_column', result.columns[0])
+                y_col = recommendation.get('y_column', result.columns[1] if len(result.columns) > 1 else result.columns[0])
+                title = recommendation.get('title', 'Line Chart')
+            else:
+                x_col = result.columns[0]
+                y_col = result.columns[1] if len(result.columns) > 1 else result.columns[0]
+                title = 'Line Chart'
+            
+            # Get column indices
+            x_idx = result.columns.index(x_col) if x_col in result.columns else 0
+            y_idx = result.columns.index(y_col) if y_col in result.columns else (1 if len(result.columns) > 1 else 0)
+            
+            # Extract data
+            x_data = [row[x_idx] for row in result.rows]
+            y_data = [float(row[y_idx]) if row[y_idx] is not None else 0 for row in result.rows]
+            
+            # Try to parse dates if x_data looks like dates
+            x_parsed = self._try_parse_dates(x_data)
+            
+            # Create line chart
+            ax.plot(x_parsed if x_parsed else range(len(x_data)), y_data, 
+                   marker='o', linewidth=2, markersize=4, color='steelblue')
+            
+            # Customize
+            ax.set_xlabel(x_col)
+            ax.set_ylabel(y_col)
+            ax.set_title(title)
+            
+            if not x_parsed:
+                ax.set_xticks(range(0, len(x_data), max(1, len(x_data)//10)))
+                ax.set_xticklabels([str(x_data[i])[:10] for i in range(0, len(x_data), max(1, len(x_data)//10))], rotation=45)
+            else:
+                ax.tick_params(axis='x', rotation=45)
+            
+            ax.grid(True, alpha=0.3)
+            fig.tight_layout()
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Line chart error: {e}")
+            return False
+    
+    def _render_pie_chart_enhanced(self, fig, result: QueryResult, recommendation: Dict[str, Any] = None) -> bool:
+        """Enhanced pie chart with LLM recommendation support"""
+        try:
+            ax = fig.add_subplot(111)
+            
+            # Determine columns
+            if recommendation:
+                label_col = recommendation.get('x_column', result.columns[0])
+                value_col = recommendation.get('y_column', result.columns[1] if len(result.columns) > 1 else result.columns[0])
+                title = recommendation.get('title', 'Pie Chart')
+            else:
+                label_col = result.columns[0]
+                value_col = result.columns[1] if len(result.columns) > 1 else result.columns[0]
+                title = 'Pie Chart'
+            
+            # Get column indices
+            label_idx = result.columns.index(label_col) if label_col in result.columns else 0
+            value_idx = result.columns.index(value_col) if value_col in result.columns else (1 if len(result.columns) > 1 else 0)
+            
+            # Extract data
+            labels = [str(row[label_idx]) for row in result.rows]
+            values = [float(row[value_idx]) if row[value_idx] is not None else 0 for row in result.rows]
+            
+            # Limit to top 8 slices for readability
+            if len(labels) > 8:
+                combined = list(zip(labels, values))
+                combined.sort(key=lambda x: x[1], reverse=True)
+                top_items = combined[:7]
+                others_value = sum(item[1] for item in combined[7:])
+                
+                labels = [item[0] for item in top_items] + ['Others']
+                values = [item[1] for item in top_items] + [others_value]
+            
+            # Create pie chart
+            wedges, texts, autotexts = ax.pie(values, labels=labels, autopct='%1.1f%%', 
+                                            startangle=90, colors=plt.cm.Set3.colors)
+            
+            # Customize
+            ax.set_title(title)
+            
+            # Adjust text size
+            for text in texts:
+                text.set_fontsize(9)
+            for autotext in autotexts:
+                autotext.set_fontsize(8)
+                autotext.set_color('white')
+                autotext.set_weight('bold')
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Pie chart error: {e}")
+            return False
+    
+    def _render_scatter_chart_enhanced(self, fig, result: QueryResult, recommendation: Dict[str, Any] = None) -> bool:
+        """Enhanced scatter chart with LLM recommendation support"""
+        try:
+            ax = fig.add_subplot(111)
+            
+            if len(result.columns) < 2:
+                ax.text(0.5, 0.5, 'Scatter plot requires at least 2 numeric columns', 
+                       ha='center', va='center', transform=ax.transAxes)
+                return False
+            
+            # Determine columns
+            if recommendation:
+                x_col = recommendation.get('x_column', result.columns[0])
+                y_col = recommendation.get('y_column', result.columns[1])
+                title = recommendation.get('title', 'Scatter Plot')
+            else:
+                x_col = result.columns[0]
+                y_col = result.columns[1]
+                title = 'Scatter Plot'
+            
+            # Get column indices
+            x_idx = result.columns.index(x_col) if x_col in result.columns else 0
+            y_idx = result.columns.index(y_col) if y_col in result.columns else 1
+            
+            # Extract numeric data
+            x_data = []
+            y_data = []
+            for row in result.rows:
+                try:
+                    x_val = float(row[x_idx]) if row[x_idx] is not None else None
+                    y_val = float(row[y_idx]) if row[y_idx] is not None else None
+                    if x_val is not None and y_val is not None:
+                        x_data.append(x_val)
+                        y_data.append(y_val)
+                except (ValueError, TypeError):
+                    continue
+            
+            if not x_data:
+                ax.text(0.5, 0.5, 'No valid numeric data for scatter plot', 
+                       ha='center', va='center', transform=ax.transAxes)
+                return False
+            
+            # Create scatter plot
+            ax.scatter(x_data, y_data, alpha=0.6, s=50, color='steelblue')
+            
+            # Customize
+            ax.set_xlabel(x_col)
+            ax.set_ylabel(y_col)
+            ax.set_title(title)
+            ax.grid(True, alpha=0.3)
+            fig.tight_layout()
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Scatter chart error: {e}")
+            return False
+    
+    def _render_histogram_enhanced(self, fig, result: QueryResult, recommendation: Dict[str, Any] = None) -> bool:
+        """Enhanced histogram with LLM recommendation support"""
+        try:
+            ax = fig.add_subplot(111)
+            
+            # Determine column
+            if recommendation:
+                data_col = recommendation.get('x_column', result.columns[0])
+                title = recommendation.get('title', 'Histogram')
+            else:
+                # Find first numeric column
+                data_col = result.columns[0]
+                for col in result.columns:
+                    col_idx = result.columns.index(col)
+                    if self._is_numeric(result, col_idx):
+                        data_col = col
+                        break
+                title = f'Histogram of {data_col}'
+            
+            # Get column index
+            data_idx = result.columns.index(data_col) if data_col in result.columns else 0
+            
+            # Extract numeric data
+            data_values = []
+            for row in result.rows:
+                try:
+                    val = float(row[data_idx]) if row[data_idx] is not None else None
+                    if val is not None:
+                        data_values.append(val)
+                except (ValueError, TypeError):
+                    continue
+            
+            if not data_values:
+                ax.text(0.5, 0.5, 'No valid numeric data for histogram', 
+                       ha='center', va='center', transform=ax.transAxes)
+                return False
+            
+            # Create histogram
+            n_bins = min(20, max(5, len(set(data_values))))
+            ax.hist(data_values, bins=n_bins, alpha=0.7, color='steelblue', edgecolor='black')
+            
+            # Customize
+            ax.set_xlabel(data_col)
+            ax.set_ylabel('Frequency')
+            ax.set_title(title)
+            ax.grid(True, alpha=0.3)
+            fig.tight_layout()
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Histogram error: {e}")
+            return False
+    
+    def _try_parse_dates(self, data_list):
+        """Try to parse data as dates"""
+        try:
+            parsed_dates = []
+            for item in data_list:
+                if isinstance(item, str):
+                    # Try common date formats
+                    for fmt in ['%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%m/%d/%Y', '%d/%m/%Y']:
+                        try:
+                            parsed_dates.append(datetime.strptime(item, fmt))
+                            break
+                        except ValueError:
+                            continue
+                    else:
+                        return None  # Couldn't parse this item
+                else:
+                    return None  # Not a string
+            return parsed_dates
+        except Exception:
+            return None

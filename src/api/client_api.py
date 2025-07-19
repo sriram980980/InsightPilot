@@ -232,36 +232,8 @@ class ClientAPI:
                 
                 generated_query = llm_response.content.strip()
                 
-                # Clean up the generated query (remove markdown formatting if present)
-                if "```sql" in generated_query:
-                    # Extract SQL from markdown code block
-                    start_idx = generated_query.find("```sql") + 6
-                    end_idx = generated_query.find("```", start_idx)
-                    if end_idx > start_idx:
-                        generated_query = generated_query[start_idx:end_idx].strip()
-                elif "```" in generated_query:
-                    # Extract from generic code block
-                    start_idx = generated_query.find("```") + 3
-                    end_idx = generated_query.find("```", start_idx)
-                    if end_idx > start_idx:
-                        generated_query = generated_query[start_idx:end_idx].strip()
-                
-                # Remove any explanatory text before/after the SQL
-                lines = generated_query.split('\n')
-                sql_lines = []
-                in_sql = False
-                
-                for line in lines:
-                    line = line.strip()
-                    if line.upper().startswith(('SELECT', 'WITH', 'SHOW')):
-                        in_sql = True
-                    if in_sql and line:
-                        sql_lines.append(line)
-                    if in_sql and line.endswith(';'):
-                        break
-                
-                if sql_lines:
-                    generated_query = ' '.join(sql_lines)
+                # Clean up the generated query
+                generated_query = self._clean_generated_query(generated_query)
                 
                 self.logger.info(f"Generated SQL query: {generated_query}")
                 
@@ -290,30 +262,55 @@ class ClientAPI:
                     execution_time=time.time() - start_time
                 )
             
-            # Execute the query
-            try:
-                query_result = adapter.execute_query(sanitized_query)
-                
-                if query_result.error:
+            # Execute the query with retry logic for MySQL errors
+            max_retries = 2
+            retry_count = 0
+            
+            while retry_count <= max_retries:
+                try:
+                    query_result = adapter.execute_query(sanitized_query)
+                    
+                    if query_result.error:
+                        # Check if this is a MySQL error that we can fix with a retry
+                        if retry_count < max_retries and self._should_retry_query(query_result.error):
+                            self.logger.info(f"Retrying query due to MySQL error: {query_result.error}")
+                            
+                            # Generate a new query with improved prompt
+                            retry_prompt = self._create_retry_prompt(schema_info, request.question, query_result.error, generated_query)
+                            retry_response = self.llm_client.generate_sql_custom_prompt(retry_prompt)
+                            
+                            if retry_response.success:
+                                retry_query = self._clean_generated_query(retry_response.content.strip())
+                                try:
+                                    sanitized_query = adapter.sanitize_query(retry_query)
+                                    generated_query = retry_query  # Update the generated query for final response
+                                    retry_count += 1
+                                    continue  # Try again with the new query
+                                except ValueError:
+                                    pass  # Fall through to original error
+                        
+                        return QueryResponse(
+                            success=False,
+                            sql_query=sanitized_query,
+                            result=None,
+                            explanation="",
+                            error=f"Query execution failed: {query_result.error}",
+                            execution_time=time.time() - start_time
+                        )
+                    
+                    # Success - break out of retry loop
+                    break
+                    
+                except Exception as exec_error:
+                    self.logger.error(f"Query execution error: {exec_error}")
                     return QueryResponse(
                         success=False,
                         sql_query=sanitized_query,
                         result=None,
                         explanation="",
-                        error=f"Query execution failed: {query_result.error}",
+                        error=f"Failed to execute query: {str(exec_error)}",
                         execution_time=time.time() - start_time
                     )
-                
-            except Exception as exec_error:
-                self.logger.error(f"Query execution error: {exec_error}")
-                return QueryResponse(
-                    success=False,
-                    sql_query=sanitized_query,
-                    result=None,
-                    explanation="",
-                    error=f"Failed to execute query: {str(exec_error)}",
-                    execution_time=time.time() - start_time
-                )
             
             # Generate explanation
             try:
@@ -399,6 +396,87 @@ class ClientAPI:
             # Update configuration
             self.config_manager.update_llm_settings({"model": model_name})
         return success
+    
+    def _should_retry_query(self, error_message: str) -> bool:
+        """Check if we should retry the query based on the error"""
+        retry_errors = [
+            "1247",  # Reference to group function
+            "Reference 'total_salary' not supported",
+            "reference to group function",
+            "aggregate function",
+            "GROUP BY",
+        ]
+        
+        error_lower = error_message.lower()
+        return any(retry_error.lower() in error_lower for retry_error in retry_errors)
+    
+    def _create_retry_prompt(self, schema_info: str, question: str, error_message: str, failed_query: str) -> str:
+        """Create an improved prompt for retry based on the error"""
+        return f"""You are an expert SQL query generator. The previous query failed with an error. Generate a corrected SQL SELECT query.
+
+### DATABASE SCHEMA ###
+{schema_info}
+
+### PREVIOUS FAILED QUERY ###
+{failed_query}
+
+### ERROR MESSAGE ###
+{error_message}
+
+### SPECIFIC FIXES NEEDED ###
+1. If the error mentions "reference to group function", restructure the query to avoid referencing aggregate function results by alias
+2. For percentage calculations, use subqueries in the SELECT clause: (SUM(column) / (SELECT SUM(column) FROM table)) * 100
+3. Avoid complex nested subqueries that reference group functions from outer queries
+4. Use proper GROUP BY clauses for all non-aggregate columns
+5. Don't reference aggregate function aliases in the same query level
+
+### RULES ###
+1. Only generate SELECT queries
+2. Use proper MySQL syntax
+3. Include LIMIT clause (max 1000 rows)
+4. Use table aliases for better readability
+5. Ensure all columns in SELECT are either in GROUP BY or are aggregate functions
+
+### ORIGINAL QUESTION ###
+{question}
+
+### CORRECTED SQL QUERY ###
+Generate only the corrected SQL query without any additional text:"""
+    
+    def _clean_generated_query(self, generated_query: str) -> str:
+        """Clean up the generated query by removing markdown and explanatory text"""
+        # Clean up the generated query (remove markdown formatting if present)
+        if "```sql" in generated_query:
+            # Extract SQL from markdown code block
+            start_idx = generated_query.find("```sql") + 6
+            end_idx = generated_query.find("```", start_idx)
+            if end_idx > start_idx:
+                generated_query = generated_query[start_idx:end_idx].strip()
+        elif "```" in generated_query:
+            # Extract from generic code block
+            start_idx = generated_query.find("```") + 3
+            end_idx = generated_query.find("```", start_idx)
+            if end_idx > start_idx:
+                generated_query = generated_query[start_idx:end_idx].strip()
+        
+        # Remove any explanatory text before/after the SQL
+        lines = generated_query.split('\n')
+        sql_lines = []
+        in_sql = False
+        
+        for line in lines:
+            line = line.strip()
+            if line.upper().startswith(('SELECT', 'WITH', 'SHOW')):
+                in_sql = True
+            if in_sql and line:
+                sql_lines.append(line)
+            if in_sql and line.endswith(';'):
+                break
+        
+        if sql_lines:
+            generated_query = ' '.join(sql_lines)
+            
+        return generated_query
     
     def cleanup_old_history(self, days_to_keep: int = 30) -> int:
         """Clean up old query history"""

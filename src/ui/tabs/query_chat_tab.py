@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal
 
 from api.client_api import ClientAPI, QueryRequest, QueryResponse
+from llm.llm_client import LLMClient
+from ui.widgets.result_viewer import ResultViewer
 
 
 class QueryExecutionThread(QThread):
@@ -58,11 +60,19 @@ class QueryChatTab(QWidget):
     def __init__(self, config_manager, parent=None):
         super().__init__(parent)
         self.config_manager = config_manager
+        self.parent_window = parent  # Store reference to main window
         self.logger = logging.getLogger(__name__)
         
         # Initialize client API for backend communication
         self.client_api = ClientAPI(config_manager)
         self.query_thread = None
+        
+        # Initialize LLM client for result viewer
+        try:
+            self.llm_client = self.client_api._init_llm_client()
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize LLM client: {e}")
+            self.llm_client = None
         
         self.setup_ui()
         self.load_connections()
@@ -282,7 +292,10 @@ class QueryChatTab(QWidget):
             if response.result:
                 ai_response += f"""
 <b>Results:</b> {response.result.row_count} rows returned in {response.execution_time:.2f}s
-<i>Data visualization will be implemented in the next phase.</i>"""
+<i>Results have been sent to the Results tab for visualization.</i>"""
+                
+                # Push results to Results tab
+                self.push_results_to_tab(response.result, response.sql_query, response.explanation)
             
             self.add_to_history(ai_response, "assistant")
             
@@ -294,6 +307,26 @@ class QueryChatTab(QWidget):
         if self.query_thread:
             self.query_thread.deleteLater()
             self.query_thread = None
+    
+    def push_results_to_tab(self, result, sql_query: str, explanation: str):
+        """Push query results to the Results tab"""
+        try:
+            # Get reference to main window and results tab
+            if self.parent_window and hasattr(self.parent_window, 'results_tab'):
+                # Switch to Results tab
+                tab_widget = self.parent_window.tab_widget
+                results_tab_index = tab_widget.indexOf(self.parent_window.results_tab)
+                if results_tab_index != -1:
+                    tab_widget.setCurrentIndex(results_tab_index)
+                
+                # Load results into the Results tab
+                self.parent_window.results_tab.load_query_results(result, sql_query, explanation)
+                
+                self.logger.info("Results pushed to Results tab successfully")
+            else:
+                self.logger.warning("Cannot access Results tab - parent window reference not available")
+        except Exception as e:
+            self.logger.error(f"Error pushing results to Results tab: {e}")
     
     def add_to_history(self, message: str, sender_type: str):
         """Add message to chat history with styling"""

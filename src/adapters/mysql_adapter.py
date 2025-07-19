@@ -211,7 +211,8 @@ class MySQLAdapter(BaseDBAdapter):
                         primary_keys=primary_keys,
                         foreign_keys=foreign_keys
                     ))
-            
+            self.logger.debug(f"the tables found are {(tables)} tables from {len(databases_to_scan)} database(s)")
+
             self.logger.info(f"Retrieved schema for {len(schemas)} tables from {len(databases_to_scan)} database(s)")
             return schemas
             
@@ -312,15 +313,36 @@ class MySQLAdapter(BaseDBAdapter):
                     )
             else:
                 self.logger.error(f"MySQL query execution error: {e}")
+                
+                # Check for common MySQL errors and provide helpful suggestions
+                error_suggestion = self._get_error_suggestion(e)
+                error_message = f"MySQL Error {e.errno}: {e.msg}"
+                if error_suggestion:
+                    error_message += f"\n\nSuggestion: {error_suggestion}"
+                
                 return QueryResult(
                     columns=[],
                     rows=[],
                     row_count=0,
                     execution_time=time.time() - start_time,
-                    error=str(e)
+                    error=error_message
                 )
         finally:
             cursor.close()
+    
+    def _get_error_suggestion(self, error: Error) -> str:
+        """Get suggestion for common MySQL errors"""
+        error_suggestions = {
+            1247: "This error occurs when referencing a group function result by alias in the same query level. Try using subqueries or restructuring the query to avoid referencing aggregate function aliases.",
+            1054: "Column not found. Check column names and table aliases. Make sure all columns exist in the selected tables.",
+            1146: "Table doesn't exist. Verify the table name and that you have access to it.",
+            1064: "SQL syntax error. Check your SQL syntax, especially around JOINs, WHERE clauses, and function calls.",
+            1046: "No database selected. Use 'USE database_name' or specify the database in your connection.",
+            1452: "Foreign key constraint fails. Check that referenced values exist in the parent table.",
+            1062: "Duplicate entry. The value you're trying to insert already exists for a unique key.",
+        }
+        
+        return error_suggestions.get(error.errno, "Please check your SQL syntax and database schema.")
     
     def validate_query(self, query: str) -> bool:
         """Validate MySQL query for safety"""
