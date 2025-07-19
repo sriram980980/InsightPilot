@@ -77,6 +77,9 @@ class QueryChatTab(QWidget):
         
         self.setup_ui()
         self.load_connections()
+        
+        # Restore last used selections from config
+        self.restore_last_selections()
     
     def showEvent(self, event):
         """Called when the tab becomes visible - refresh connections"""
@@ -125,6 +128,7 @@ class QueryChatTab(QWidget):
             "Scatter Plot"
         ])
         self.viz_framework_combo.setCurrentText("Auto-detect")
+        self.viz_framework_combo.currentTextChanged.connect(self.on_visualization_changed)
         config_layout.addRow("Visualization:", self.viz_framework_combo)
         
         # Refresh connections button
@@ -199,6 +203,10 @@ class QueryChatTab(QWidget):
     def load_connections(self):
         """Load available database and LLM connections using new type/sub-type system"""
         try:
+            # Save current selections to restore them after reload
+            current_db_selection = self.db_connection_combo.currentData()
+            current_llm_selection = self.llm_connection_combo.currentData()
+            
             # Get all connections and filter by type
             all_connections = self.config_manager.get_connections()
             llm_connections = self.config_manager.get_llm_connections()
@@ -208,12 +216,19 @@ class QueryChatTab(QWidget):
             self.llm_connection_combo.clear()
             
             # Populate database connections with sub-type information
+            db_selection_restored = False
             for name, conn in all_connections.items():
                 if conn.get('type') == 'DB':
                     # Use sub_type for display
                     sub_type = conn.get('sub_type', 'unknown')
                     display_name = f"{name} ({sub_type.upper()})"
                     self.db_connection_combo.addItem(display_name, name)
+                    
+                    # Restore previous selection if it matches
+                    if name == current_db_selection:
+                        self.db_connection_combo.setCurrentText(display_name)
+                        db_selection_restored = True
+                        
             # Count database connections
             db_connections = [conn for conn in all_connections.values() if conn.get('type') == 'DB']
             
@@ -226,6 +241,7 @@ class QueryChatTab(QWidget):
             
             # Populate LLM connections with sub-type information
             enabled_llm_count = 0
+            llm_selection_restored = False
             for name, conn in llm_connections.items():
                 # Use sub_type for display, with fallback for legacy connections
                 sub_type = conn.get('sub_type') or conn.get('provider', 'unknown')
@@ -243,6 +259,11 @@ class QueryChatTab(QWidget):
                     display_name = f"{name} ({sub_type_display})"
                     self.llm_connection_combo.addItem(display_name, name)
                     enabled_llm_count += 1
+                    
+                    # Restore previous selection if it matches
+                    if name == current_llm_selection:
+                        self.llm_connection_combo.setCurrentText(display_name)
+                        llm_selection_restored = True
             
             # Add placeholder if no enabled LLM connections
             if enabled_llm_count == 0:
@@ -254,7 +275,20 @@ class QueryChatTab(QWidget):
             else:
                 self.llm_connection_combo.setEnabled(True)
             
+            # Update status labels if selections were restored
+            if db_selection_restored:
+                self.on_db_connection_changed(self.db_connection_combo.currentText())
+            if llm_selection_restored:
+                self.on_llm_connection_changed(self.llm_connection_combo.currentText())
+            
             self.logger.info(f"Loaded {len(db_connections)} database connections and {enabled_llm_count}/{len(llm_connections)} enabled LLM connections")
+            
+            # Log selection restoration status
+            if db_selection_restored:
+                self.logger.debug(f"Restored DB selection: {current_db_selection}")
+            if llm_selection_restored:
+                self.logger.debug(f"Restored LLM selection: {current_llm_selection}")
+                
         except Exception as e:
             self.logger.error(f"Error loading connections: {e}")
             QMessageBox.warning(
@@ -262,6 +296,59 @@ class QueryChatTab(QWidget):
                 "Connection Error",
                 f"Failed to load connections: {str(e)}"
             )
+    
+    def save_last_selections(self):
+        """Save the current selections to configuration for next session"""
+        try:
+            db_selection = self.db_connection_combo.currentData()
+            llm_selection = self.llm_connection_combo.currentData()
+            viz_selection = self.viz_framework_combo.currentText()
+            
+            # Save to UI settings
+            ui_settings = self.config_manager.get_ui_settings()
+            ui_settings['last_db_connection'] = db_selection
+            ui_settings['last_llm_connection'] = llm_selection
+            ui_settings['last_visualization'] = viz_selection
+            
+            self.config_manager.save_ui_settings(ui_settings)
+            self.logger.debug(f"Saved last selections: DB={db_selection}, LLM={llm_selection}, Viz={viz_selection}")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to save last selections: {e}")
+    
+    def restore_last_selections(self):
+        """Restore the last used selections from configuration"""
+        try:
+            ui_settings = self.config_manager.get_ui_settings()
+            last_db = ui_settings.get('last_db_connection')
+            last_llm = ui_settings.get('last_llm_connection')
+            last_viz = ui_settings.get('last_visualization', 'Auto-detect')
+            
+            # Restore database connection
+            if last_db:
+                for i in range(self.db_connection_combo.count()):
+                    if self.db_connection_combo.itemData(i) == last_db:
+                        self.db_connection_combo.setCurrentIndex(i)
+                        self.logger.debug(f"Restored DB selection: {last_db}")
+                        break
+            
+            # Restore LLM connection
+            if last_llm:
+                for i in range(self.llm_connection_combo.count()):
+                    if self.llm_connection_combo.itemData(i) == last_llm:
+                        self.llm_connection_combo.setCurrentIndex(i)
+                        self.logger.debug(f"Restored LLM selection: {last_llm}")
+                        break
+            
+            # Restore visualization selection
+            if last_viz:
+                index = self.viz_framework_combo.findText(last_viz)
+                if index >= 0:
+                    self.viz_framework_combo.setCurrentIndex(index)
+                    self.logger.debug(f"Restored visualization selection: {last_viz}")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to restore last selections: {e}")
     
     def clear_input(self):
         """Clear the query input"""
@@ -531,6 +618,9 @@ class QueryChatTab(QWidget):
                 status_text = f"Type: {sub_type.upper()} | Host: {host}:{port} | DB: {database}"
                 self.db_status_label.setText(status_text)
                 self.db_status_label.setStyleSheet("color: blue; font-size: 10px;")
+                
+                # Save selection when changed
+                self.save_last_selections()
             else:
                 self.db_status_label.setText("Connection not found")
                 self.db_status_label.setStyleSheet("color: red; font-size: 10px;")
@@ -579,6 +669,9 @@ class QueryChatTab(QWidget):
                     self.llm_status_label.setStyleSheet("color: green; font-size: 10px;")
                     
                 self.llm_status_label.setText(status_text)
+                
+                # Save selection when changed
+                self.save_last_selections()
             else:
                 self.llm_status_label.setText("Connection not found")
                 self.llm_status_label.setStyleSheet("color: red; font-size: 10px;")
@@ -587,3 +680,9 @@ class QueryChatTab(QWidget):
             self.logger.error(f"Error getting LLM connection info: {e}")
             self.llm_status_label.setText("Error getting connection info")
             self.llm_status_label.setStyleSheet("color: red; font-size: 10px;")
+    
+    def on_visualization_changed(self, viz_type: str):
+        """Handle visualization type selection change"""
+        # Save selection when changed
+        self.save_last_selections()
+        self.logger.debug(f"Visualization changed to: {viz_type}")
