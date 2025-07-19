@@ -321,6 +321,12 @@ class ConnectionDialog(QDialog):
         elif db_type == "Oracle":
             self.setup_oracle_fields()
             self.port_spin.setValue(1521)
+        elif db_type == "MongoDB":
+            self.setup_mongodb_fields()
+            self.port_spin.setValue(27017)
+        elif db_type == "PostgreSQL":
+            self.setup_postgresql_fields()
+            self.port_spin.setValue(5432)
     
     def clear_db_specific_fields(self):
         """Clear database-specific fields"""
@@ -364,6 +370,40 @@ class ConnectionDialog(QDialog):
         # This would be implemented for different Oracle connection methods
         pass
     
+    def setup_mongodb_fields(self):
+        """Set up MongoDB-specific fields"""
+        mongo_group = QGroupBox("MongoDB Settings")
+        mongo_layout = QFormLayout(mongo_group)
+        
+        # Default Database
+        self.mongo_database_edit = QLineEdit()
+        self.mongo_database_edit.setPlaceholderText("The database to use as default. Leave blank for 'admin'.")
+        mongo_layout.addRow("Default Database:", self.mongo_database_edit)
+        
+        # Authentication Database
+        self.mongo_auth_db_edit = QLineEdit()
+        self.mongo_auth_db_edit.setPlaceholderText("Database for authentication. Usually 'admin'.")
+        mongo_layout.addRow("Auth Database:", self.mongo_auth_db_edit)
+        
+        self.db_specific_layout.addWidget(mongo_group)
+    
+    def setup_postgresql_fields(self):
+        """Set up PostgreSQL-specific fields"""
+        postgres_group = QGroupBox("PostgreSQL Settings")
+        postgres_layout = QFormLayout(postgres_group)
+        
+        # Default Database
+        self.postgres_database_edit = QLineEdit()
+        self.postgres_database_edit.setPlaceholderText("The database to connect to. Default is 'postgres'.")
+        postgres_layout.addRow("Database:", self.postgres_database_edit)
+        
+        # Schema
+        self.postgres_schema_edit = QLineEdit()
+        self.postgres_schema_edit.setPlaceholderText("Default schema. Usually 'public'.")
+        postgres_layout.addRow("Schema:", self.postgres_schema_edit)
+        
+        self.db_specific_layout.addWidget(postgres_group)
+    
     def get_connection_config(self):
         """Get the current connection configuration with new type/sub-type structure"""
         db_type = self.type_combo.currentText()
@@ -388,13 +428,33 @@ class ConnectionDialog(QDialog):
         }
         
         if db_type == 'MySQL':
-            config['database'] = self.mysql_schema_edit.text()
+            if hasattr(self, 'mysql_schema_edit'):
+                config['database'] = self.mysql_schema_edit.text()
+            else:
+                config['database'] = ''
         elif db_type == 'Oracle':
-            config['service_name'] = self.oracle_service_edit.text()
+            if hasattr(self, 'oracle_service_edit'):
+                config['service_name'] = self.oracle_service_edit.text()
+            else:
+                config['service_name'] = ''
         elif db_type == 'MongoDB':
-            config['database'] = getattr(self, 'mongo_database_edit', self.mysql_schema_edit).text()
+            if hasattr(self, 'mongo_database_edit'):
+                config['database'] = self.mongo_database_edit.text()
+            else:
+                config['database'] = ''
+            if hasattr(self, 'mongo_auth_db_edit'):
+                config['auth_database'] = self.mongo_auth_db_edit.text()
+            else:
+                config['auth_database'] = 'admin'
         elif db_type == 'PostgreSQL':
-            config['database'] = getattr(self, 'postgres_database_edit', self.mysql_schema_edit).text()
+            if hasattr(self, 'postgres_database_edit'):
+                config['database'] = self.postgres_database_edit.text()
+            else:
+                config['database'] = 'postgres'
+            if hasattr(self, 'postgres_schema_edit'):
+                config['schema'] = self.postgres_schema_edit.text()
+            else:
+                config['schema'] = 'public'
         
         return config
     
@@ -472,16 +532,38 @@ class ConnectionDialog(QDialog):
                 config = connections[self.connection_name]
                 
                 self.name_edit.setText(self.connection_name)
-                self.type_combo.setCurrentText(config.get('type', 'MySQL'))
+                
+                # Map sub-types to UI display names
+                sub_type_to_display = {
+                    'mysql': 'MySQL',
+                    'mongodb': 'MongoDB',
+                    'postgres': 'PostgreSQL'
+                }
+                
+                sub_type = config.get('sub_type', 'mysql')
+                display_type = sub_type_to_display.get(sub_type, 'MySQL')
+                self.type_combo.setCurrentText(display_type)
+                
                 self.hostname_edit.setText(config.get('host', ''))
                 self.port_spin.setValue(config.get('port', 3306))
                 self.username_edit.setText(config.get('username', ''))
                 # Note: Password is not loaded for security reasons
                 
-                if config['type'] == 'MySQL':
+                # Load database-specific fields after the UI has been set up
+                if sub_type == 'mysql' and hasattr(self, 'mysql_schema_edit'):
                     self.mysql_schema_edit.setText(config.get('database', ''))
-                elif config['type'] == 'Oracle':
+                elif sub_type == 'oracle' and hasattr(self, 'oracle_service_edit'):
                     self.oracle_service_edit.setText(config.get('service_name', ''))
+                elif sub_type == 'mongodb':
+                    if hasattr(self, 'mongo_database_edit'):
+                        self.mongo_database_edit.setText(config.get('database', ''))
+                    if hasattr(self, 'mongo_auth_db_edit'):
+                        self.mongo_auth_db_edit.setText(config.get('auth_database', 'admin'))
+                elif sub_type == 'postgres':
+                    if hasattr(self, 'postgres_database_edit'):
+                        self.postgres_database_edit.setText(config.get('database', 'postgres'))
+                    if hasattr(self, 'postgres_schema_edit'):
+                        self.postgres_schema_edit.setText(config.get('schema', 'public'))
                 
         except Exception as e:
             self.logger.error(f"Error loading connection config: {e}")
