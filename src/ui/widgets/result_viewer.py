@@ -1,5 +1,5 @@
 """
-Result Viewer Widget - Display query results as tables and charts
+Result Viewer Widget - Display query results as tables and charts with enhanced zoom functionality
 """
 
 import json
@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
     QTableWidget, QTableWidgetItem, QTabWidget, QLabel,
     QComboBox, QGroupBox, QFormLayout, QTextEdit, QLineEdit,
-    QSplitter, QMessageBox, QProgressBar, QCheckBox
+    QSplitter, QMessageBox, QProgressBar, QCheckBox, QFileDialog
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
@@ -21,6 +21,7 @@ import pandas as pd
 from adapters.base_adapter import QueryResult
 from llm.llm_client import LLMClient, LLMResponse
 from visualization.chart_renderer import ChartRenderer
+from .enhanced_chart_widget import EnhancedChartArea
 
 
 class ChartRecommendationThread(QThread):
@@ -76,7 +77,7 @@ class ResultViewer(QWidget):
         layout = QVBoxLayout(self)
         
         # Control panel
-        control_group = QGroupBox("Visualization Controls")
+        control_group = QGroupBox("📊 Visualization Controls")
         control_layout = QFormLayout(control_group)
         
         # Chart type selection
@@ -100,15 +101,20 @@ class ResultViewer(QWidget):
         self.auto_recommend_btn.setEnabled(False)
         button_layout.addWidget(self.auto_recommend_btn)
         
-        self.apply_hint_btn = QPushButton("📊 Apply Chart Hint")
+        self.apply_hint_btn = QPushButton("� Apply Chart Hint")
         self.apply_hint_btn.clicked.connect(self.apply_chart_hint)
         self.apply_hint_btn.setEnabled(False)
         button_layout.addWidget(self.apply_hint_btn)
         
-        self.export_btn = QPushButton("💾 Export")
+        self.export_btn = QPushButton("💾 Export Data")
         self.export_btn.clicked.connect(self.export_data)
         self.export_btn.setEnabled(False)
         button_layout.addWidget(self.export_btn)
+        
+        self.save_chart_btn = QPushButton("📸 Save Chart")
+        self.save_chart_btn.clicked.connect(self.save_chart)
+        self.save_chart_btn.setEnabled(False)
+        button_layout.addWidget(self.save_chart_btn)
         
         button_layout.addStretch()
         control_layout.addRow("", button_layout)
@@ -125,21 +131,13 @@ class ResultViewer(QWidget):
         
         # Table view tab
         self.table_widget = QTableWidget()
+        self.table_widget.setAlternatingRowColors(True)
+        self.table_widget.setSortingEnabled(True)
         self.result_tabs.addTab(self.table_widget, "📋 Table View")
         
-        # Chart view tab
-        self.chart_widget = QWidget()
-        chart_layout = QVBoxLayout(self.chart_widget)
-        
-        # Chart info label
-        self.chart_info_label = QLabel("No chart generated yet")
-        self.chart_info_label.setStyleSheet("color: #666; font-style: italic; padding: 10px;")
-        chart_layout.addWidget(self.chart_info_label)
-        
-        # Chart canvas will be added dynamically
-        self.chart_canvas = None
-        
-        self.result_tabs.addTab(self.chart_widget, "📊 Chart View")
+        # Enhanced Chart view tab with zoom functionality
+        self.enhanced_chart_area = EnhancedChartArea()
+        self.result_tabs.addTab(self.enhanced_chart_area, "📊 Chart View (Zoomable)")
         
         layout.addWidget(self.result_tabs)
         
@@ -165,6 +163,7 @@ class ResultViewer(QWidget):
         self.auto_recommend_btn.setEnabled(True)
         self.apply_hint_btn.setEnabled(True)
         self.export_btn.setEnabled(True)
+        # save_chart_btn will be enabled after chart generation
         
         # Update status
         self.status_label.setText(
@@ -174,6 +173,9 @@ class ResultViewer(QWidget):
         # Auto-generate chart if LLM is available
         if self.llm_client:
             self.auto_recommend_chart()
+        else:
+            # If no LLM, generate a basic chart
+            self.generate_chart()
     
     def load_table_view(self, result: QueryResult):
         """Load data into table widget"""
@@ -300,68 +302,141 @@ class ResultViewer(QWidget):
                 self.result_tabs.setCurrentIndex(0)  # Switch to table view
                 return
             
-            # Remove existing chart canvas
-            if self.chart_canvas:
-                self.chart_widget.layout().removeWidget(self.chart_canvas)
-                self.chart_canvas.deleteLater()
-                self.chart_canvas = None
-            
-            # Create new figure and canvas
-            fig = Figure(figsize=(10, 6), dpi=100)
-            self.chart_canvas = FigureCanvas(fig)
-            
             # Generate chart using chart renderer
-            success = self.chart_renderer.render_chart_with_recommendation(fig, self.current_result, recommendation)
+            chart_bytes = self.chart_renderer.render_chart(
+                self.current_result, 
+                chart_type=chart_type,
+                title=recommendation.get('title', f'{chart_type.title()} Chart') if recommendation else f'{chart_type.title()} Chart'
+            )
             
-            if success:
-                # Add canvas to layout
-                chart_layout = self.chart_widget.layout()
-                chart_layout.removeWidget(self.chart_info_label)
-                chart_layout.addWidget(self.chart_canvas)
-                chart_layout.addWidget(self.chart_info_label)
+            if chart_bytes:
+                # Display chart in enhanced chart area
+                self.enhanced_chart_area.display_chart(chart_bytes)
                 
-                # Update info label
-                if recommendation:
-                    info_text = f"Chart: {chart_type.title()}\nReasoning: {recommendation.get('reasoning', 'N/A')}"
-                else:
-                    info_text = f"Chart: {chart_type.title()}"
-                self.chart_info_label.setText(info_text)
+                # Enable save chart button
+                self.save_chart_btn.setEnabled(True)
                 
                 # Switch to chart view
                 self.result_tabs.setCurrentIndex(1)
                 
-                # Refresh canvas
-                self.chart_canvas.draw()
+                self.logger.info(f"Chart generated successfully: {chart_type}")
             else:
-                self.chart_info_label.setText(f"Failed to generate {chart_type} chart")
+                self.enhanced_chart_area.show_error(f"Failed to generate {chart_type} chart")
         
         except Exception as e:
             self.logger.error(f"Chart generation error: {e}")
-            self.chart_info_label.setText(f"Error generating chart: {str(e)}")
+            self.enhanced_chart_area.show_error(f"Error generating chart: {str(e)}")
     
     def export_data(self):
-        """Export current data"""
+        """Export current data to CSV or Excel"""
         if not self.current_result:
             return
         
-        # For now, just show a message - can be enhanced with actual export functionality
-        QMessageBox.information(
-            self, 
-            "Export", 
-            f"Export functionality will save {self.current_result.row_count} rows to CSV/Excel."
-        )
+        try:
+            # Get export file path
+            file_path, file_type = QFileDialog.getSaveFileName(
+                self,
+                "Export Data",
+                "query_results.csv",
+                "CSV Files (*.csv);;Excel Files (*.xlsx);;All Files (*)"
+            )
+            
+            if not file_path:
+                return
+            
+            # Convert result to pandas DataFrame
+            df = pd.DataFrame(self.current_result.rows, columns=self.current_result.columns)
+            
+            # Export based on file extension
+            if file_path.endswith('.xlsx'):
+                df.to_excel(file_path, index=False)
+                format_name = "Excel"
+            else:
+                df.to_csv(file_path, index=False)
+                format_name = "CSV"
+            
+            QMessageBox.information(
+                self,
+                "Export Successful",
+                f"Data successfully exported to {format_name} file:\n{file_path}"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Export error: {e}")
+            QMessageBox.critical(
+                self,
+                "Export Error",
+                f"Failed to export data: {str(e)}"
+            )
+    
+    def save_chart(self):
+        """Save current chart as image"""
+        if not self.current_result:
+            return
+        
+        try:
+            # Get save file path
+            file_path, file_type = QFileDialog.getSaveFileName(
+                self,
+                "Save Chart",
+                "chart.png",
+                "PNG Files (*.png);;JPEG Files (*.jpg);;PDF Files (*.pdf);;All Files (*)"
+            )
+            
+            if not file_path:
+                return
+            
+            # Get current chart type
+            chart_type = self.chart_type_combo.currentText()
+            
+            if chart_type == "table":
+                QMessageBox.information(self, "No Chart", "Please select a chart type other than 'table' to save.")
+                return
+            
+            # Generate high-resolution chart for saving
+            chart_bytes = self.chart_renderer.render_chart(
+                self.current_result,
+                chart_type=chart_type,
+                title=f'{chart_type.title()} Chart',
+                dpi=300,  # High resolution
+                figsize=(12, 8)  # Larger size for better quality
+            )
+            
+            if chart_bytes:
+                # Save the chart bytes directly
+                with open(file_path, 'wb') as f:
+                    f.write(chart_bytes)
+                
+                QMessageBox.information(
+                    self,
+                    "Chart Saved",
+                    f"Chart successfully saved to:\n{file_path}"
+                )
+            else:
+                QMessageBox.critical(self, "Save Error", "Failed to generate chart for saving.")
+                
+        except Exception as e:
+            self.logger.error(f"Save chart error: {e}")
+            QMessageBox.critical(
+                self,
+                "Save Error",
+                f"Failed to save chart: {str(e)}"
+            )
     
     def clear_display(self):
         """Clear all displays"""
         self.table_widget.setRowCount(0)
         self.table_widget.setColumnCount(0)
         
-        if self.chart_canvas:
-            self.chart_widget.layout().removeWidget(self.chart_canvas)
-            self.chart_canvas.deleteLater()
-            self.chart_canvas = None
+        # Clear enhanced chart area
+        self.enhanced_chart_area.show_placeholder("No chart generated yet")
         
-        self.chart_info_label.setText("No chart generated yet")
+        # Disable buttons
         self.auto_recommend_btn.setEnabled(False)
         self.apply_hint_btn.setEnabled(False)
         self.export_btn.setEnabled(False)
+        self.save_chart_btn.setEnabled(False)
+        
+        # Clear current data
+        self.current_result = None
+        self.current_question = ""

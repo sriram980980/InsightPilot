@@ -183,14 +183,25 @@ class MainWindow(QMainWindow):
         self.setFont(font)
     
     def load_stylesheet(self):
-        """Load and apply the compact stylesheet"""
+        """Load and apply the enhanced stylesheet"""
         try:
-            style_path = Path(__file__).parent / "style.qss"
+            # Try enhanced stylesheet first
+            style_path = Path(__file__).parent / "style_enhanced.qss"
             if style_path.exists():
                 with open(style_path, 'r', encoding='utf-8') as f:
                     stylesheet = f.read()
                 self.setStyleSheet(stylesheet)
-                self.logger.info("Compact stylesheet loaded successfully")
+                self.logger.info("Enhanced stylesheet loaded successfully")
+            else:
+                # Fallback to original stylesheet
+                style_path = Path(__file__).parent / "style.qss"
+                if style_path.exists():
+                    with open(style_path, 'r', encoding='utf-8') as f:
+                        stylesheet = f.read()
+                    self.setStyleSheet(stylesheet)
+                    self.logger.info("Fallback stylesheet loaded successfully")
+                else:
+                    self.logger.warning("No stylesheet file found")
         except Exception as e:
             self.logger.warning(f"Failed to load stylesheet: {e}")
     

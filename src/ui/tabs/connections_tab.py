@@ -89,25 +89,40 @@ class ConnectionsTab(QWidget):
         header_layout.addWidget(QLabel("Filter:"))
         header_layout.addWidget(self.connection_filter)
         
+        # Add inline New LLM button next to filter
+        self.new_llm_btn = QPushButton("+ New LLM")
+        self.new_llm_btn.clicked.connect(self.new_llm_connection)
+        self.new_llm_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 3px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        header_layout.addWidget(self.new_llm_btn)
+        
         connections_layout.addLayout(header_layout)
         
         # Buttons
         button_layout = QHBoxLayout()
         
         self.new_db_btn = QPushButton("New Database")
-        self.new_llm_btn = QPushButton("New LLM")
         self.edit_btn = QPushButton("Edit")
         self.delete_btn = QPushButton("Delete")
         self.test_btn = QPushButton("Test Connection")
         
         self.new_db_btn.clicked.connect(self.new_db_connection)
-        self.new_llm_btn.clicked.connect(self.new_llm_connection)
         self.edit_btn.clicked.connect(self.edit_connection)
         self.delete_btn.clicked.connect(self.delete_connection)
         self.test_btn.clicked.connect(self.test_connection)
         
         button_layout.addWidget(self.new_db_btn)
-        button_layout.addWidget(self.new_llm_btn)
         button_layout.addWidget(self.edit_btn)
         button_layout.addWidget(self.delete_btn)
         button_layout.addWidget(self.test_btn)

@@ -184,7 +184,7 @@ class ClientAPI:
                 table_callback(table_name)
         
         try:
-            report_progress("Establishing database connection...")
+            report_progress("Establishing database connection!")
             
             # Check if connected to database
             if request.database_name not in self.adapters:
@@ -199,7 +199,7 @@ class ClientAPI:
                     )
             
             adapter = self.adapters[request.database_name]
-            report_progress("✅ Connected! Scanning database schema...")
+            report_progress("✅ Connected! Scanning database schema!")
             
             # Get schema information with progress reporting
             try:
@@ -237,13 +237,13 @@ class ClientAPI:
             
             # Generate SQL using LLM with proper prompt
             try:
-                report_progress("🤖 AI is analyzing your question...")
+                report_progress("🤖 AI is analyzing your question!")
                 
                 if request.database_type == "mongodb":
-                    report_progress("🧠 Generating MongoDB aggregation query...")
+                    report_progress("🧠 Generating MongoDB aggregation query!")
                     llm_response = self.llm_client.generate_mongodb_query(schema_info, request.question)
                 else:
-                    report_progress("🧠 Crafting SQL query for your request...")
+                    report_progress("🧠 Crafting SQL query for your request!")
                     llm_response = self.llm_client.generate_sql(schema_info, request.question)
                 
                 if not llm_response.success:
@@ -279,7 +279,7 @@ class ClientAPI:
             
             # Validate and sanitize the query
             try:
-                report_progress("🔒 Validating query for security...")
+                report_progress("🔒 Validating query for security!")
                 sanitized_query = adapter.sanitize_query(generated_query)
                 report_progress("✅ Query validation passed!")
             except ValueError as validation_error:
@@ -299,13 +299,13 @@ class ClientAPI:
             
             while retry_count <= max_retries:
                 try:
-                    report_progress("⚡ Executing query against database...")
+                    report_progress("⚡ Executing query against database!")
                     query_result = adapter.execute_query(sanitized_query)
                     
                     if query_result.error:
                         # Check if this is a MySQL error that we can fix with a retry
                         if retry_count < max_retries and self._should_retry_query(query_result.error):
-                            report_progress(f"⚠️ Query issue detected, AI is creating an improved version (attempt {retry_count + 2}/{max_retries + 1})...")
+                            report_progress(f"⚠️ Query issue detected, AI is creating an improved version (attempt {retry_count + 2}/{max_retries + 1})!")
                             
                             # Generate a new query with improved prompt
                             retry_prompt = self._create_retry_prompt(schema_info, request.question, query_result.error, generated_query)
@@ -348,7 +348,7 @@ class ClientAPI:
             
             # Generate explanation
             try:
-                report_progress("📖 AI is preparing an explanation...")
+                report_progress("📖 AI is preparing an explanation!")
                 explanation_response = self.llm_client.explain_query(sanitized_query)
                 explanation = explanation_response.content if explanation_response.success else "Query explanation not available"
                 report_progress("✅ Analysis complete!")

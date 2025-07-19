@@ -32,7 +32,7 @@ class QueryExecutionThread(QThread):
     def run(self):
         """Execute the query in background"""
         try:
-            self.progress_updated.emit("🔍 Connecting to database...")
+            self.progress_updated.emit("🔍 Connecting to database!")
             
             # Enhanced execute_query call with progress callback
             response = self.client_api.execute_query_with_progress(
