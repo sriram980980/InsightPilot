@@ -21,6 +21,7 @@ class QueryExecutionThread(QThread):
     
     query_completed = Signal(object)  # QueryResponse
     progress_updated = Signal(str)
+    table_scanned = Signal(str)  # Individual table scanned
     
     def __init__(self, client_api: ClientAPI, query_request: QueryRequest):
         super().__init__()
@@ -31,14 +32,14 @@ class QueryExecutionThread(QThread):
     def run(self):
         """Execute the query in background"""
         try:
-            self.progress_updated.emit("Getting database schema!")
-            schema = self.client_api.get_schema(
-                self.query_request.database_name,
-                self.query_request.database_type
-            )
+            self.progress_updated.emit("🔍 Connecting to database...")
             
-            self.progress_updated.emit("Generating SQL query with LLM!")
-            response = self.client_api.execute_query(self.query_request)
+            # Enhanced execute_query call with progress callback
+            response = self.client_api.execute_query_with_progress(
+                self.query_request, 
+                progress_callback=self.progress_updated.emit,
+                table_callback=self.table_scanned.emit
+            )
             
             self.query_completed.emit(response)
             
@@ -273,6 +274,7 @@ class QueryChatTab(QWidget):
         self.query_thread = QueryExecutionThread(self.client_api, query_request)
         self.query_thread.query_completed.connect(self.on_query_completed)
         self.query_thread.progress_updated.connect(self.on_progress_updated)
+        self.query_thread.table_scanned.connect(self.on_table_scanned)
         self.query_thread.start()
         
         # Clear input
@@ -282,7 +284,11 @@ class QueryChatTab(QWidget):
     
     def on_progress_updated(self, message: str):
         """Handle progress updates"""
-        self.add_to_history(f"<i>{message}</i>", "system")
+        self.add_to_history(f"<i>🔄 {message}</i>", "system")
+    
+    def on_table_scanned(self, table_name: str):
+        """Handle table scan updates"""
+        self.add_to_history(f"<i>📋 Found table: <strong>{table_name}</strong></i>", "system")
     
     def on_query_completed(self, response: QueryResponse):
         """Handle completed query"""
@@ -345,7 +351,7 @@ class QueryChatTab(QWidget):
         elif sender_type == "assistant":
             styled_message = f"<div style='margin: 10px 0; padding: 10px; background-color: #f3e5f5; border-radius: 5px;'>{message}</div>"
         elif sender_type == "system":
-            styled_message = f"<div style='margin: 5px 0; padding: 5px; color: #666; font-style: italic;'>{message}</div>"
+            styled_message = f"<div style='margin: 5px 0; padding: 8px; color: #555; font-style: italic; background-color: #f8f9fa; border-left: 3px solid #007bff; border-radius: 3px;'>{message}</div>"
         else:  # error
             styled_message = f"<div style='margin: 10px 0; padding: 10px; background-color: #ffebee; border-radius: 5px;'>{message}</div>"
         

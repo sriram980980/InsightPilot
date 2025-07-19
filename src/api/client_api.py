@@ -167,10 +167,25 @@ class ClientAPI:
     
     def execute_natural_language_query(self, request: QueryRequest) -> QueryResponse:
         """Execute a natural language query"""
+        return self.execute_natural_language_query_with_progress(request)
+    
+    def execute_natural_language_query_with_progress(self, request: QueryRequest, progress_callback=None, table_callback=None) -> QueryResponse:
+        """Execute a natural language query with progress reporting"""
         import time
         start_time = time.time()
         
+        def report_progress(message):
+            if progress_callback:
+                progress_callback(message)
+            self.logger.info(message)
+        
+        def report_table(table_name):
+            if table_callback:
+                table_callback(table_name)
+        
         try:
+            report_progress("Establishing database connection...")
+            
             # Check if connected to database
             if request.database_name not in self.adapters:
                 if not self.connect_to_database(request.database_name):
@@ -184,8 +199,9 @@ class ClientAPI:
                     )
             
             adapter = self.adapters[request.database_name]
+            report_progress("✅ Connected! Scanning database schema...")
             
-            # Get schema information
+            # Get schema information with progress reporting
             try:
                 schema = adapter.get_schema()
                 if not schema:
@@ -198,6 +214,12 @@ class ClientAPI:
                         error="No schema information available. Database may be empty or inaccessible.",
                         execution_time=time.time() - start_time
                     )
+                
+                # Report each table found
+                for table in schema:
+                    report_table(table.name)
+                
+                report_progress(f"📊 Schema analysis complete! Found {len(schema)} tables")
                 
                 schema_info = self.prompt_builder.format_schema_info(schema)
                 self.logger.info(f"Retrieved schema for {request.database_name}: {len(schema)} tables")
@@ -215,9 +237,13 @@ class ClientAPI:
             
             # Generate SQL using LLM with proper prompt
             try:
+                report_progress("🤖 AI is analyzing your question...")
+                
                 if request.database_type == "mongodb":
+                    report_progress("🧠 Generating MongoDB aggregation query...")
                     llm_response = self.llm_client.generate_mongodb_query(schema_info, request.question)
                 else:
+                    report_progress("🧠 Crafting SQL query for your request...")
                     llm_response = self.llm_client.generate_sql(schema_info, request.question)
                 
                 if not llm_response.success:
@@ -235,6 +261,9 @@ class ClientAPI:
                 # Clean up the generated query
                 generated_query = self._clean_generated_query(generated_query)
                 
+                report_progress(f"✨ Query generated successfully!")
+                report_progress(f"📝 Generated Query: {generated_query[:100]}{'...' if len(generated_query) > 100 else ''}")
+                
                 self.logger.info(f"Generated SQL query: {generated_query}")
                 
             except Exception as llm_error:
@@ -250,7 +279,9 @@ class ClientAPI:
             
             # Validate and sanitize the query
             try:
+                report_progress("🔒 Validating query for security...")
                 sanitized_query = adapter.sanitize_query(generated_query)
+                report_progress("✅ Query validation passed!")
             except ValueError as validation_error:
                 self.logger.error(f"Query validation failed: {validation_error}")
                 return QueryResponse(
@@ -268,12 +299,13 @@ class ClientAPI:
             
             while retry_count <= max_retries:
                 try:
+                    report_progress("⚡ Executing query against database...")
                     query_result = adapter.execute_query(sanitized_query)
                     
                     if query_result.error:
                         # Check if this is a MySQL error that we can fix with a retry
                         if retry_count < max_retries and self._should_retry_query(query_result.error):
-                            self.logger.info(f"Retrying query due to MySQL error: {query_result.error}")
+                            report_progress(f"⚠️ Query issue detected, AI is creating an improved version (attempt {retry_count + 2}/{max_retries + 1})...")
                             
                             # Generate a new query with improved prompt
                             retry_prompt = self._create_retry_prompt(schema_info, request.question, query_result.error, generated_query)
@@ -284,6 +316,7 @@ class ClientAPI:
                                 try:
                                     sanitized_query = adapter.sanitize_query(retry_query)
                                     generated_query = retry_query  # Update the generated query for final response
+                                    report_progress(f"🔄 Improved query: {retry_query[:100]}{'...' if len(retry_query) > 100 else ''}")
                                     retry_count += 1
                                     continue  # Try again with the new query
                                 except ValueError:
@@ -299,6 +332,7 @@ class ClientAPI:
                         )
                     
                     # Success - break out of retry loop
+                    report_progress(f"🎉 Query executed successfully! Found {query_result.row_count} rows in {query_result.execution_time:.2f}s")
                     break
                     
                 except Exception as exec_error:
@@ -314,8 +348,10 @@ class ClientAPI:
             
             # Generate explanation
             try:
+                report_progress("📖 AI is preparing an explanation...")
                 explanation_response = self.llm_client.explain_query(sanitized_query)
                 explanation = explanation_response.content if explanation_response.success else "Query explanation not available"
+                report_progress("✅ Analysis complete!")
             except Exception as explain_error:
                 self.logger.warning(f"Failed to generate explanation: {explain_error}")
                 explanation = "Query explanation not available"
@@ -360,6 +396,10 @@ class ClientAPI:
     def execute_query(self, request: QueryRequest) -> QueryResponse:
         """Execute a query request (alias for execute_natural_language_query)"""
         return self.execute_natural_language_query(request)
+    
+    def execute_query_with_progress(self, request: QueryRequest, progress_callback=None, table_callback=None) -> QueryResponse:
+        """Execute a query request with progress callbacks"""
+        return self.execute_natural_language_query_with_progress(request, progress_callback, table_callback)
     
     def get_query_history(self, database_name: Optional[str] = None, limit: int = 50) -> List[QueryHistoryEntry]:
         """Get query history"""
