@@ -23,14 +23,19 @@ class ConnectionTestThread(QThread):
     def run(self):
         """Test the database connection"""
         try:
-            db_type = self.connection_config['type']
+            # Use sub_type instead of type for provider selection
+            db_sub_type = self.connection_config.get('sub_type', 'mysql')
             
-            if db_type == 'MySQL':
+            if db_sub_type == 'mysql':
                 success, message = self.test_mysql_connection()
-            elif db_type == 'Oracle':
+            elif db_sub_type == 'oracle':
                 success, message = self.test_oracle_connection()
+            elif db_sub_type == 'mongodb':
+                success, message = self.test_mongodb_connection()
+            elif db_sub_type == 'postgres':
+                success, message = self.test_postgres_connection()
             else:
-                success, message = False, f"Unsupported database type: {db_type}"
+                success, message = False, f"Unsupported database sub-type: {db_sub_type}"
                 
             self.result_ready.emit(success, message)
             
@@ -89,6 +94,51 @@ class ConnectionTestThread(QThread):
             return False, "Oracle client not installed. Please install oracledb."
         except Exception as e:
             return False, f"Oracle connection failed: {str(e)}"
+    
+    def test_mongodb_connection(self):
+        """Test MongoDB connection"""
+        try:
+            import pymongo
+            
+            # Build connection URI
+            if self.connection_config.get('username') and self.connection_config.get('password'):
+                uri = f"mongodb://{self.connection_config['username']}:{self.connection_config['password']}@{self.connection_config['host']}:{self.connection_config['port']}/{self.connection_config.get('database', 'admin')}"
+            else:
+                uri = f"mongodb://{self.connection_config['host']}:{self.connection_config['port']}"
+            
+            client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=10000)
+            # Test connection
+            client.admin.command('ping')
+            client.close()
+            
+            return True, "MongoDB connection successful!"
+            
+        except ImportError:
+            return False, "MongoDB driver not installed. Please install pymongo."
+        except Exception as e:
+            return False, f"MongoDB connection failed: {str(e)}"
+    
+    def test_postgres_connection(self):
+        """Test PostgreSQL connection"""
+        try:
+            import psycopg2
+            
+            connection = psycopg2.connect(
+                host=self.connection_config['host'],
+                port=self.connection_config['port'],
+                user=self.connection_config['username'],
+                password=self.connection_config['password'],
+                database=self.connection_config.get('database', 'postgres'),
+                connect_timeout=10
+            )
+            connection.close()
+            
+            return True, "PostgreSQL connection successful!"
+            
+        except ImportError:
+            return False, "PostgreSQL driver not installed. Please install psycopg2."
+        except Exception as e:
+            return False, f"PostgreSQL connection failed: {str(e)}"
 
 
 class ConnectionDialog(QDialog):
@@ -123,14 +173,14 @@ class ConnectionDialog(QDialog):
         name_layout.addWidget(self.name_edit)
         layout.addLayout(name_layout)
         
-        # Database type
+        # Database type and sub-type
         type_layout = QHBoxLayout()
-        type_layout.addWidget(QLabel("Connection Method:"))
+        type_layout.addWidget(QLabel("Database Type:"))
         self.type_combo = QComboBox()
-        self.type_combo.addItems(["MySQL", "Oracle"])
+        self.type_combo.addItems(["MySQL", "MongoDB", "PostgreSQL"])
         self.type_combo.currentTextChanged.connect(self.on_type_changed)
         type_layout.addWidget(self.type_combo)
-        type_layout.addWidget(QLabel("Method to use to connect to the RDBMS"))
+        type_layout.addWidget(QLabel("Type of database to connect to"))
         layout.addLayout(type_layout)
         
         # Create tab widget for different parameter sets
@@ -315,21 +365,36 @@ class ConnectionDialog(QDialog):
         pass
     
     def get_connection_config(self):
-        """Get the current connection configuration"""
+        """Get the current connection configuration with new type/sub-type structure"""
+        db_type = self.type_combo.currentText()
+        
+        # Map UI display names to sub-types
+        sub_type_map = {
+            "MySQL": "mysql",
+            "MongoDB": "mongodb", 
+            "PostgreSQL": "postgres"
+        }
+        
         config = {
-            'type': self.type_combo.currentText(),
+            'type': 'DB',  # New connection type
+            'sub_type': sub_type_map.get(db_type, 'mysql'),  # New sub-type
             'host': self.hostname_edit.text(),
             'port': self.port_spin.value(),
             'username': self.username_edit.text(),
             'password': self.password_edit.text(),
             'timeout': self.timeout_spin.value(),
-            'autocommit': self.autocommit_check.isChecked()
+            'autocommit': self.autocommit_check.isChecked(),
+            'enabled': True  # Default to enabled
         }
         
-        if config['type'] == 'MySQL':
+        if db_type == 'MySQL':
             config['database'] = self.mysql_schema_edit.text()
-        elif config['type'] == 'Oracle':
+        elif db_type == 'Oracle':
             config['service_name'] = self.oracle_service_edit.text()
+        elif db_type == 'MongoDB':
+            config['database'] = getattr(self, 'mongo_database_edit', self.mysql_schema_edit).text()
+        elif db_type == 'PostgreSQL':
+            config['database'] = getattr(self, 'postgres_database_edit', self.mysql_schema_edit).text()
         
         return config
     

@@ -27,18 +27,21 @@ class PromptBuilder:
 4. Include appropriate WHERE clauses for filtering
 5. Use JOINs when needed to relate tables
 6. Add LIMIT clauses to prevent large result sets (max 1000 rows)
-7. Use proper aggregate functions (COUNT, SUM, AVG, etc.) when appropriate
-8. Always use table aliases for better readability
-9. When calculating percentages, use subqueries in the SELECT clause, not in nested FROM clauses
-10. Avoid complex nested subqueries that reference group functions from outer queries
-11. Use HAVING clause instead of WHERE for filtering on aggregate functions
-12. For percentage calculations, calculate totals in separate subqueries
+7. LIMIT clause must use literal integers only (e.g., LIMIT 100), NOT expressions or subqueries
+8. Use proper aggregate functions (COUNT, SUM, AVG, etc.) when appropriate
+9. Always use table aliases for better readability
+10. When calculating percentages, use subqueries in the SELECT clause, not in nested FROM clauses
+11. Avoid complex nested subqueries that reference group functions from outer queries
+12. Use HAVING clause instead of WHERE for filtering on aggregate functions
+13. For percentage calculations, calculate totals in separate subqueries
 
 ### MYSQL SPECIFIC GUIDELINES ###
 - Use backticks around table/column names if they contain special characters
 - For percentage calculations, structure queries like: (value / (SELECT SUM(column) FROM table)) * 100
 - Avoid referencing aggregate function results by alias in the same query level
 - Use proper GROUP BY clauses for all non-aggregate columns in SELECT
+- LIMIT clause must be a literal number (e.g., LIMIT 50), never use expressions like LIMIT 2 * (SELECT COUNT(...))
+- If you need dynamic limits, use a reasonable fixed number like LIMIT 100 or LIMIT 1000
 
 ### QUESTION ###
 {question}

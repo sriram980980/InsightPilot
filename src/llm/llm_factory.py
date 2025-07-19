@@ -17,46 +17,60 @@ class LLMClientFactory:
         """Create an enhanced LLM client from configuration"""
         logger = logging.getLogger(__name__)
         
-        # Get provider configurations
-        provider_configs = config_manager.get_llm_providers()
-        llm_settings = config_manager.get_llm_settings()
-        default_provider = llm_settings.get("default_provider", "ollama")
+        # Get LLM connections instead of providers
+        llm_connections = config_manager.get_llm_connections()
+        default_provider = config_manager.get_default_llm_connection()
         
-        # Convert config format to LLMConfig objects
+        # Convert LLM connections to LLMConfig objects using sub_type
         llm_configs = {}
-        for name, config in provider_configs.items():
-            if config.get("enabled", True):
+        for name, connection_config in llm_connections.items():
+            if connection_config.get("type", "").upper() == "LLM":
                 try:
+                    # Use sub_type instead of provider_type for consistent mapping
+                    sub_type = connection_config.get("sub_type", "").lower()
+                    
+                    # Map sub_type to provider names for LLMConfig
+                    provider_type_map = {
+                        "openai": "openai",
+                        "github": "github_copilot", 
+                        "ollama": "ollama"
+                    }
+                    
+                    provider_type = provider_type_map.get(sub_type)
+                    if not provider_type:
+                        logger.warning(f"Unknown LLM sub_type '{sub_type}' for connection '{name}', skipping")
+                        continue
+                    
                     llm_config = LLMConfig(
-                        provider=config["provider"],
-                        model=config["model"],
-                        api_key=config.get("api_key"),
-                        base_url=config.get("base_url"),
-                        temperature=config.get("temperature", 0.1),
-                        max_tokens=config.get("max_tokens", 1000),
-                        timeout=config.get("timeout", 180),
-                        additional_params=config.get("additional_params")
+                        provider=provider_type,
+                        model=connection_config.get("model", "mistral:7b"),
+                        api_key=connection_config.get("token") or connection_config.get("api_key"),
+                        base_url=connection_config.get("base_url"),
+                        temperature=connection_config.get("temperature", 0.1),
+                        max_tokens=connection_config.get("max_tokens", 1000),
+                        timeout=connection_config.get("timeout", 180),
+                        additional_params=connection_config.get("additional_params")
                     )
+                    
+                    # Handle Ollama connections that might not have explicit base_url
+                    if sub_type == "ollama" and not llm_config.base_url:
+                        host = connection_config.get("host", "localhost")
+                        port = connection_config.get("port", 11434)
+                        llm_config.base_url = f"http://{host}:{port}"
+                    
                     llm_configs[name] = llm_config
-                    logger.info(f"Configured LLM provider: {name}")
+                    logger.info(f"Configured LLM connection: {name} (sub_type: {sub_type} -> provider: {provider_type})")
+                    
                 except Exception as e:
-                    logger.error(f"Failed to configure provider {name}: {e}")
+                    logger.error(f"Failed to configure connection {name}: {e}")
         
         # Create enhanced client
         if llm_configs:
             return EnhancedLLMClient(llm_configs, default_provider)
         else:
-            # Fallback to default Ollama configuration
-            logger.warning("No providers configured, using default Ollama setup")
-            default_config = LLMConfig(
-                provider="ollama",
-                model="mistral:7b",
-                base_url="http://localhost:11434",
-                temperature=0.1,
-                max_tokens=1000,
-                timeout=180
-            )
-            return EnhancedLLMClient({"ollama": default_config}, "ollama")
+            # If no connections exist, return empty client
+            logger.warning("No LLM connections configured")
+            return EnhancedLLMClient({}, None)
     
     @staticmethod
     def create_provider_config(

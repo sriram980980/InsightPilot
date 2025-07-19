@@ -19,124 +19,157 @@ class LLMTestThread(QThread):
     result_ready = Signal(bool, str)
     progress_update = Signal(str)
     
-    def __init__(self, llm_config, provider_type="ollama"):
+    def __init__(self, llm_config, provider_sub_type="ollama"):
         super().__init__()
         self.llm_config = llm_config
-        self.provider_type = provider_type
+        self.provider_sub_type = provider_sub_type
         
     def run(self):
         """Test the LLM connection"""
         try:
-            self.progress_update.emit(f"Testing {self.provider_type.upper()} connection!")
+            self.progress_update.emit(f"Testing {self.provider_sub_type.upper()} connection!")
             
-            if self.provider_type == "ollama":
+            if self.provider_sub_type == "ollama":
                 self._test_ollama()
-            elif self.provider_type == "openai":
+            elif self.provider_sub_type == "openai":
                 self._test_openai()
-            elif self.provider_type == "github_copilot":
+            elif self.provider_sub_type == "github":
                 self._test_github_copilot()
             else:
-                self.result_ready.emit(False, f"Unsupported provider type: {self.provider_type}")
+                self.result_ready.emit(False, f"Unsupported provider sub-type: {self.provider_sub_type}")
                 
         except Exception as e:
             self.result_ready.emit(False, f"Connection test error: {str(e)}")
     
     def _test_ollama(self):
         """Test Ollama connection"""
-        # Create LLM client
-        client = LLMClient(
-            host=self.llm_config['host'],
-            port=self.llm_config['port'],
-            model=self.llm_config['model']
-        )
-        
-        # Test health check
-        self.progress_update.emit("Checking Ollama server health!")
-        if not client.health_check():
-            self.result_ready.emit(False, "Ollama server is not running or unreachable")
-            return
-        
-        # Test model availability
-        self.progress_update.emit("Checking model availability!")
-        models = client.list_models()
-        available_models = [model["name"] for model in models.get("models", [])]
-        
-        if self.llm_config['model'] not in available_models:
-            self.result_ready.emit(False, f"Model '{self.llm_config['model']}' not found. Available models: {', '.join(available_models)}")
-            return
-        
-        # Test generation
-        self.progress_update.emit("Testing text generation!")
-        response = client.generate("Hello, this is a test prompt.")
-        
-        if response.success:
-            self.result_ready.emit(True, f"Ollama connection successful! Generated {response.tokens_used} tokens.")
-        else:
-            self.result_ready.emit(False, f"Generation test failed: {response.error}")
+        try:
+            # Validate required config fields first
+            required_fields = ['host', 'port', 'model']
+            missing_fields = [field for field in required_fields if field not in self.llm_config]
+            if missing_fields:
+                self.result_ready.emit(False, f"Missing required config fields: {', '.join(missing_fields)}")
+                return
+            
+            # Create LLM client
+            client = LLMClient(
+                host=self.llm_config['host'],
+                port=self.llm_config['port'],
+                model=self.llm_config['model']
+            )
+            
+            # Test health check
+            self.progress_update.emit("Checking Ollama server health!")
+            if not client.health_check():
+                self.result_ready.emit(False, "Ollama server is not running or unreachable")
+                return
+            
+            # Test model availability
+            self.progress_update.emit("Checking model availability!")
+            models = client.list_models()
+            available_models = [model["name"] for model in models.get("models", [])]
+            
+            if self.llm_config['model'] not in available_models:
+                self.result_ready.emit(False, f"Model '{self.llm_config['model']}' not found. Available models: {', '.join(available_models)}")
+                return
+            
+            # Test generation
+            self.progress_update.emit("Testing text generation!")
+            response = client.generate("Hello, this is a test prompt.")
+            
+            if response.success:
+                self.result_ready.emit(True, f"Ollama connection successful! Generated {response.tokens_used} tokens.")
+            else:
+                self.result_ready.emit(False, f"Generation test failed: {response.error}")
+                
+        except Exception as e:
+            self.result_ready.emit(False, f"Ollama test error: {str(e)}")
     
     def _test_openai(self):
         """Test OpenAI connection"""
-        from llm.providers.openai_provider import OpenAIProvider
-        from llm.providers.base_provider import LLMConfig
-        
-        config = LLMConfig(
-            provider="openai",
-            model=self.llm_config['model'],
-            api_key=self.llm_config['api_key'],
-            base_url=self.llm_config['base_url'],
-            temperature=self.llm_config['temperature'],
-            max_tokens=self.llm_config['max_tokens'],
-            timeout=self.llm_config['timeout']
-        )
-        
-        provider = OpenAIProvider(config)
-        
-        # Test health check
-        self.progress_update.emit("Testing OpenAI API access!")
-        if not provider.health_check():
-            self.result_ready.emit(False, "Cannot access OpenAI API. Please check your API key.")
-            return
-        
-        # Test generation
-        self.progress_update.emit("Testing text generation with OpenAI!")
-        response = provider.generate("Hello, this is a test prompt.")
-        
-        if response.success:
-            self.result_ready.emit(True, f"OpenAI connection successful! Generated {response.tokens_used} tokens using {response.model}.")
-        else:
-            self.result_ready.emit(False, f"Generation test failed: {response.error}")
+        try:
+            from llm.providers.openai_provider import OpenAIProvider
+            from llm.providers.base_provider import LLMConfig
+            
+            # Validate required config fields first
+            required_fields = ['model', 'api_key', 'base_url', 'temperature', 'max_tokens', 'timeout']
+            missing_fields = [field for field in required_fields if field not in self.llm_config]
+            if missing_fields:
+                self.result_ready.emit(False, f"Missing required config fields: {', '.join(missing_fields)}")
+                return
+            
+            config = LLMConfig(
+                provider="openai",
+                model=self.llm_config['model'],
+                api_key=self.llm_config['api_key'],
+                base_url=self.llm_config['base_url'],
+                temperature=self.llm_config['temperature'],
+                max_tokens=self.llm_config['max_tokens'],
+                timeout=self.llm_config['timeout']
+            )
+            
+            provider = OpenAIProvider(config)
+            
+            # Test health check
+            self.progress_update.emit("Testing OpenAI API access!")
+            if not provider.health_check():
+                self.result_ready.emit(False, "Cannot access OpenAI API. Please check your API key.")
+                return
+            
+            # Test generation
+            self.progress_update.emit("Testing text generation with OpenAI!")
+            response = provider.generate("Hello, this is a test prompt.")
+            
+            if response.success:
+                self.result_ready.emit(True, f"OpenAI connection successful! Generated {response.tokens_used} tokens using {response.model}.")
+            else:
+                self.result_ready.emit(False, f"Generation test failed: {response.error}")
+                
+        except Exception as e:
+            self.result_ready.emit(False, f"OpenAI test error: {str(e)}")
     
     def _test_github_copilot(self):
         """Test GitHub Copilot connection"""
-        from llm.providers.github_copilot_provider import GitHubCopilotProvider
-        from llm.providers.base_provider import LLMConfig
-        
-        config = LLMConfig(
-            provider="github_copilot",
-            model=self.llm_config['model'],
-            api_key=self.llm_config['api_key'],
-            base_url=self.llm_config['base_url'],
-            temperature=self.llm_config['temperature'],
-            max_tokens=self.llm_config['max_tokens'],
-            timeout=self.llm_config['timeout']
-        )
-        
-        provider = GitHubCopilotProvider(config)
-        
-        # Test health check
-        self.progress_update.emit("Testing GitHub Copilot API access!")
-        if not provider.health_check():
-            self.result_ready.emit(False, "Cannot access GitHub Copilot API. Please check your token and subscription.")
-            return
-        
-        # Test generation
-        self.progress_update.emit("Testing text generation with GitHub Copilot!")
-        response = provider.generate("Hello, this is a test prompt.")
-        
-        if response.success:
-            self.result_ready.emit(True, f"GitHub Copilot connection successful! Generated {response.tokens_used} tokens using {response.model}.")
-        else:
-            self.result_ready.emit(False, f"Generation test failed: {response.error}")
+        try:
+            from llm.providers.github_copilot_provider import GitHubCopilotProvider
+            from llm.providers.base_provider import LLMConfig
+            
+            # Validate required config fields first
+            required_fields = ['model', 'api_key', 'base_url', 'temperature', 'max_tokens', 'timeout']
+            missing_fields = [field for field in required_fields if field not in self.llm_config]
+            if missing_fields:
+                self.result_ready.emit(False, f"Missing required config fields: {', '.join(missing_fields)}")
+                return
+            
+            config = LLMConfig(
+                provider="github_copilot",
+                model=self.llm_config['model'],
+                api_key=self.llm_config['api_key'],
+                base_url=self.llm_config['base_url'],
+                temperature=self.llm_config['temperature'],
+                max_tokens=self.llm_config['max_tokens'],
+                timeout=self.llm_config['timeout']
+            )
+            
+            provider = GitHubCopilotProvider(config)
+            
+            # Test health check
+            self.progress_update.emit("Testing GitHub Copilot API access!")
+            if not provider.health_check():
+                self.result_ready.emit(False, "Cannot access GitHub Copilot API. Please check your token and subscription.")
+                return
+            
+            # Test generation
+            self.progress_update.emit("Testing text generation with GitHub Copilot!")
+            response = provider.generate("Hello, this is a test prompt.")
+            
+            if response.success:
+                self.result_ready.emit(True, f"GitHub Copilot connection successful! Generated {response.tokens_used} tokens using {response.model}.")
+            else:
+                self.result_ready.emit(False, f"Generation test failed: {response.error}")
+                
+        except Exception as e:
+            self.result_ready.emit(False, f"GitHub Copilot test error: {str(e)}")
 
 
 class LLMConnectionDialog(QDialog):
@@ -175,11 +208,11 @@ class LLMConnectionDialog(QDialog):
         provider_group = QGroupBox("LLM Provider Configuration")
         self.provider_layout = QFormLayout(provider_group)
         
-        # Provider type
+        # Provider sub-type
         self.provider_type = QComboBox()
-        self.provider_type.addItems(["ollama", "openai", "github_copilot"])
+        self.provider_type.addItems(["ollama", "openai", "github"])
         self.provider_type.currentTextChanged.connect(self.on_provider_type_changed)
-        self.provider_layout.addRow("Provider Type:", self.provider_type)
+        self.provider_layout.addRow("Provider Sub-Type:", self.provider_type)
         
         # API Key (for external providers)
         self.api_key_edit = QLineEdit()
@@ -347,7 +380,7 @@ class LLMConnectionDialog(QDialog):
             ])
             self.load_models_btn.setText("Load OpenAI Models")
             
-        elif provider_type == "github_copilot":
+        elif provider_type == "github":
             # Show GitHub Copilot-specific fields
             self.api_key_edit.setVisible(True)
             self.host_edit.setVisible(False)
@@ -523,7 +556,7 @@ class LLMConnectionDialog(QDialog):
         if self.test_thread and self.test_thread.isRunning():
             return
         
-        provider_type = self.provider_type.currentText()
+        provider_sub_type = self.provider_type.currentText()
         config = self._get_current_config()
         
         self.test_btn.setEnabled(False)
@@ -531,15 +564,15 @@ class LLMConnectionDialog(QDialog):
         self.progress_bar.setRange(0, 0)  # Indeterminate progress
         self.test_result.clear()
         
-        self.test_thread = LLMTestThread(config, provider_type)
+        self.test_thread = LLMTestThread(config, provider_sub_type)
         self.test_thread.result_ready.connect(self.on_test_result)
         self.test_thread.progress_update.connect(self.on_progress_update)
         
         self.test_thread.start()
     
     def _get_current_config(self):
-        """Get current configuration based on provider type"""
-        provider_type = self.provider_type.currentText()
+        """Get current configuration based on provider sub-type"""
+        provider_sub_type = self.provider_type.currentText()
         
         # Get model ID from combo box data, fallback to text if no data stored
         model_id = self.model_combo.currentData()
@@ -547,20 +580,25 @@ class LLMConnectionDialog(QDialog):
             model_id = self.model_combo.currentText()
         
         config = {
-            'provider': provider_type,
+            'sub_type': provider_sub_type,  # Use sub_type
             'model': model_id,
             'temperature': self.temperature_spin.value() / 100.0,
             'max_tokens': self.max_tokens_spin.value(),
             'timeout': self.timeout_spin.value()
         }
         
-        if provider_type == "ollama":
+        if provider_sub_type == "ollama":
             config.update({
                 'host': self.host_edit.text(),
                 'port': self.port_spin.value(),
                 'base_url': f"http://{self.host_edit.text()}:{self.port_spin.value()}"
             })
-        else:  # openai or github_copilot
+        elif provider_sub_type == "github":
+            config.update({
+                'api_key': self.api_key_edit.text(),  # Use api_key consistently
+                'base_url': self.base_url_edit.text()
+            })
+        else:  # openai
             config.update({
                 'api_key': self.api_key_edit.text(),
                 'base_url': self.base_url_edit.text()
@@ -585,17 +623,17 @@ class LLMConnectionDialog(QDialog):
             self.test_result.setStyleSheet("color: red;")
     
     def save_connection(self):
-        """Save the LLM connection"""
+        """Save the LLM connection with new type/sub-type structure"""
         name = self.name_edit.text().strip()
         if not name:
             QMessageBox.warning(self, "Validation Error", "Connection name is required.")
             return
         
-        provider_type = self.provider_type.currentText()
+        provider_sub_type = self.provider_type.currentText()
         
-        # Validation based on provider type
-        if provider_type in ["openai", "github_copilot"] and not self.api_key_edit.text().strip():
-            provider_name = "OpenAI API key" if provider_type == "openai" else "GitHub Personal Access Token"
+        # Validation based on provider sub-type
+        if provider_sub_type in ["openai", "github"] and not self.api_key_edit.text().strip():
+            provider_name = "OpenAI API key" if provider_sub_type == "openai" else "GitHub Personal Access Token"
             QMessageBox.warning(self, "Validation Error", f"{provider_name} is required.")
             return
         
@@ -605,23 +643,29 @@ class LLMConnectionDialog(QDialog):
             model_id = self.model_combo.currentText()
         
         config = {
-            'type': 'LLM',
-            'provider': provider_type,
+            'type': 'LLM',  # New connection type
+            'sub_type': provider_sub_type,  # New sub-type field
             'model': model_id,
             'temperature': self.temperature_spin.value() / 100.0,
             'max_tokens': self.max_tokens_spin.value(),
-            'timeout': self.timeout_spin.value()
+            'timeout': self.timeout_spin.value(),
+            'enabled': True  # Default to enabled
         }
         
-        if provider_type == "ollama":
+        if provider_sub_type == "ollama":
             config.update({
                 'host': self.host_edit.text(),
                 'port': self.port_spin.value()
             })
-        else:  # openai or github_copilot
+        elif provider_sub_type == "openai":
             config.update({
                 'api_key': self.api_key_edit.text(),
-                'base_url': self.base_url_edit.text()
+                'base_url': self.base_url_edit.text() or "https://api.openai.com/v1"
+            })
+        elif provider_sub_type == "github":
+            config.update({
+                'api_key': self.api_key_edit.text(),  # Use api_key consistently
+                'base_url': self.base_url_edit.text() or "https://models.inference.ai.azure.com"
             })
         
         try:
@@ -640,10 +684,15 @@ class LLMConnectionDialog(QDialog):
                 
                 self.name_edit.setText(self.connection_name)
                 
-                # Set provider type first
-                provider_type = config.get('provider', 'ollama')
-                self.provider_type.setCurrentText(provider_type)
-                self.on_provider_type_changed(provider_type)
+                # Set provider sub-type first - handle both old and new config formats
+                provider_sub_type = config.get('sub_type') or config.get('provider', 'ollama')
+                
+                # Map old provider names to new sub-types
+                if provider_sub_type == 'github_copilot':
+                    provider_sub_type = 'github'
+                
+                self.provider_type.setCurrentText(provider_sub_type)
+                self.on_provider_type_changed(provider_sub_type)
                 
                 # Set common fields
                 stored_model = config.get('model', '')
@@ -668,10 +717,14 @@ class LLMConnectionDialog(QDialog):
                 self.timeout_spin.setValue(config.get('timeout', 180))
                 
                 # Set provider-specific fields
-                if provider_type == "ollama":
+                if provider_sub_type == "ollama":
                     self.host_edit.setText(config.get('host', 'localhost'))
                     self.port_spin.setValue(config.get('port', 11434))
-                else:  # openai or github_copilot
+                elif provider_sub_type == "github":
+                    # Handle both old 'token' field and new 'api_key' field for backward compatibility
+                    self.api_key_edit.setText(config.get('api_key') or config.get('token', ''))
+                    self.base_url_edit.setText(config.get('base_url', ''))
+                else:  # openai
                     self.api_key_edit.setText(config.get('api_key', ''))
                     self.base_url_edit.setText(config.get('base_url', ''))
                 

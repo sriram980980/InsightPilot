@@ -44,14 +44,12 @@ class TestConfigManager:
         """Test default configuration structure"""
         config = self.config_manager.get_config()
         
-        required_keys = ["database_connections", "llm_settings", "ui_settings", "security", "export_settings"]
+        required_keys = ["database_connections", "llm_connections", "ui_settings", "security", "export_settings"]
         
         for key in required_keys:
             assert key in config
         
-        assert "model" in config["llm_settings"]
-        assert "host" in config["llm_settings"]
-        assert "port" in config["llm_settings"]
+        assert "default_llm_connection" in config
         assert "theme" in config["ui_settings"]
         assert "query_timeout" in config["security"]
         assert "max_rows" in config["security"]
@@ -95,23 +93,6 @@ class TestConfigManager:
             assert "test_conn" not in connections
             assert mock_save.call_count == 2  # Once for add, once for remove
     
-    def test_update_llm_settings(self):
-        """Test updating LLM settings"""
-        new_settings = {
-            "model": "llama3:8b",
-            "temperature": 0.5,
-            "max_tokens": 2000
-        }
-        
-        with patch.object(self.config_manager, '_save_config') as mock_save:
-            self.config_manager.update_llm_settings(new_settings)
-            
-            llm_settings = self.config_manager.get_llm_settings()
-            assert llm_settings["model"] == "llama3:8b"
-            assert llm_settings["temperature"] == 0.5
-            assert llm_settings["max_tokens"] == 2000
-            mock_save.assert_called_once()
-    
     def test_update_ui_settings(self):
         """Test updating UI settings"""
         new_settings = {
@@ -145,14 +126,15 @@ class TestConfigManager:
     def test_reset_config(self):
         """Test configuration reset"""
         # Modify some settings first
-        self.config_manager.update_llm_settings({"model": "custom:model"})
+        self.config_manager.update_ui_settings({"theme": "dark"})
         
         with patch.object(self.config_manager, '_save_config') as mock_save:
             self.config_manager.reset_config()
             
             # Check that config is reset to defaults
-            llm_settings = self.config_manager.get_llm_settings()
-            assert llm_settings["model"] == "mistral:7b"  # Default model
+            ui_settings = self.config_manager.get_ui_settings()
+            assert ui_settings["theme"] == "light"  # Default theme
+            assert self.config_manager.get_default_llm_connection() is None  # Default connection
             mock_save.assert_called_once()
     
     def test_get_database_connections_empty(self):

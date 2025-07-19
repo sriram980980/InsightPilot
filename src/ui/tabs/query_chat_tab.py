@@ -78,6 +78,12 @@ class QueryChatTab(QWidget):
         self.setup_ui()
         self.load_connections()
     
+    def showEvent(self, event):
+        """Called when the tab becomes visible - refresh connections"""
+        super().showEvent(event)
+        # Refresh connections to ensure they're up to date
+        self.load_connections()
+    
     def setup_ui(self):
         """Set up the query chat tab UI"""
         layout = QVBoxLayout(self)
@@ -89,12 +95,24 @@ class QueryChatTab(QWidget):
         # Database connection dropdown
         self.db_connection_combo = QComboBox()
         self.db_connection_combo.setPlaceholderText("Select database connection!")
+        self.db_connection_combo.currentTextChanged.connect(self.on_db_connection_changed)
         config_layout.addRow("Database Connection:", self.db_connection_combo)
+        
+        # Database connection status
+        self.db_status_label = QLabel("No database selected")
+        self.db_status_label.setStyleSheet("color: gray; font-size: 10px;")
+        config_layout.addRow("", self.db_status_label)
         
         # LLM connection dropdown
         self.llm_connection_combo = QComboBox()
         self.llm_connection_combo.setPlaceholderText("Select LLM connection!")
+        self.llm_connection_combo.currentTextChanged.connect(self.on_llm_connection_changed)
         config_layout.addRow("LLM Connection:", self.llm_connection_combo)
+        
+        # LLM connection status
+        self.llm_status_label = QLabel("No LLM selected")
+        self.llm_status_label.setStyleSheet("color: gray; font-size: 10px;")
+        config_layout.addRow("", self.llm_status_label)
         
         # Visualization framework dropdown
         self.viz_framework_combo = QComboBox()
@@ -113,6 +131,12 @@ class QueryChatTab(QWidget):
         refresh_btn = QPushButton("🔄 Refresh Connections")
         refresh_btn.clicked.connect(self.load_connections)
         config_layout.addRow("", refresh_btn)
+        
+        # Connection help button
+        help_btn = QPushButton("❓ Connection Help")
+        help_btn.clicked.connect(self.show_connection_help)
+        help_btn.setStyleSheet("color: blue;")
+        config_layout.addRow("", help_btn)
         
         layout.addWidget(config_group)
         
@@ -173,44 +197,64 @@ class QueryChatTab(QWidget):
         splitter.setSizes([400, 250])
         
     def load_connections(self):
-        """Load available database and LLM connections"""
+        """Load available database and LLM connections using new type/sub-type system"""
         try:
-            connections_dict = self.config_manager.get_connections()
-            # Convert to list of dicts, adding 'name' key
-            connections = []
-            for name, conn in connections_dict.items():
-                if isinstance(conn, dict):
-                    conn = dict(conn)  # copy
-                    conn['name'] = name
-                    connections.append(conn)
+            # Get all connections and filter by type
+            all_connections = self.config_manager.get_connections()
+            llm_connections = self.config_manager.get_llm_connections()
+            
             # Clear existing items
             self.db_connection_combo.clear()
             self.llm_connection_combo.clear()
-            # Populate database connections
-            db_connections = [conn for conn in connections if conn.get('type') != 'LLM']
-            for conn in db_connections:
-                self.db_connection_combo.addItem(
-                    f"{conn['name']} ({conn.get('database_type', 'Unknown')})",
-                    conn['name']
-                )
-            # Populate LLM connections
-            llm_connections = [conn for conn in connections if conn.get('type') == 'LLM']
-            for conn in llm_connections:
-                self.llm_connection_combo.addItem(
-                    f"{conn['name']} ({conn.get('provider', 'Unknown')})",
-                    conn['name']
-                )
             
-            # Add LLM providers to the combo as well
-            llm_providers = self.config_manager.get_llm_providers()
-            for provider_name, provider_config in llm_providers.items():
-                if provider_config.get("enabled", True):
-                    self.llm_connection_combo.addItem(
-                        f"{provider_name} ({provider_config.get('provider', 'Unknown')})",
-                        provider_name
-                    )
+            # Populate database connections with sub-type information
+            for name, conn in all_connections.items():
+                if conn.get('type') == 'DB':
+                    # Use sub_type for display
+                    sub_type = conn.get('sub_type', 'unknown')
+                    display_name = f"{name} ({sub_type.upper()})"
+                    self.db_connection_combo.addItem(display_name, name)
+            # Count database connections
+            db_connections = [conn for conn in all_connections.values() if conn.get('type') == 'DB']
             
-            self.logger.info(f"Loaded {len(db_connections)} database and {len(llm_connections)} LLM connections")
+            # Add placeholder if no database connections
+            if not db_connections:
+                self.db_connection_combo.addItem("No database connections available", None)
+                self.db_connection_combo.setEnabled(False)
+            else:
+                self.db_connection_combo.setEnabled(True)
+            
+            # Populate LLM connections with sub-type information
+            enabled_llm_count = 0
+            for name, conn in llm_connections.items():
+                # Use sub_type for display, with fallback for legacy connections
+                sub_type = conn.get('sub_type') or conn.get('provider', 'unknown')
+                
+                # Map legacy provider names to new sub-types for display
+                sub_type_display = {
+                    'github_copilot': 'GitHub',
+                    'github': 'GitHub', 
+                    'openai': 'OpenAI',
+                    'ollama': 'Ollama'
+                }.get(sub_type, sub_type.title())
+                
+                # Only show enabled connections
+                if conn.get('enabled', True):
+                    display_name = f"{name} ({sub_type_display})"
+                    self.llm_connection_combo.addItem(display_name, name)
+                    enabled_llm_count += 1
+            
+            # Add placeholder if no enabled LLM connections
+            if enabled_llm_count == 0:
+                if llm_connections:
+                    self.llm_connection_combo.addItem("No enabled LLM connections available", None)
+                else:
+                    self.llm_connection_combo.addItem("No LLM connections available", None)
+                self.llm_connection_combo.setEnabled(False)
+            else:
+                self.llm_connection_combo.setEnabled(True)
+            
+            self.logger.info(f"Loaded {len(db_connections)} database connections and {enabled_llm_count}/{len(llm_connections)} enabled LLM connections")
         except Exception as e:
             self.logger.error(f"Error loading connections: {e}")
             QMessageBox.warning(
@@ -230,13 +274,39 @@ class QueryChatTab(QWidget):
             QMessageBox.warning(self, "Input Required", "Please enter a query.")
             return
         
-        # Validate selections
+        # Validate selections with enhanced error messages
         if self.db_connection_combo.currentData() is None:
-            QMessageBox.warning(self, "Selection Required", "Please select a database connection.")
+            QMessageBox.warning(
+                self, 
+                "Database Connection Required", 
+                "Please select a database connection from the dropdown.\n\n"
+                "If no connections are available, go to the Connections tab to create a new database connection."
+            )
             return
             
         if self.llm_connection_combo.currentData() is None:
-            QMessageBox.warning(self, "Selection Required", "Please select an LLM connection.")
+            QMessageBox.warning(
+                self, 
+                "LLM Connection Required", 
+                "Please select an LLM connection from the dropdown.\n\n"
+                "If no connections are available, go to the Connections tab to create a new LLM connection."
+            )
+            return
+        
+        # Validate connection status
+        db_connection_name = self.db_connection_combo.currentData()
+        llm_connection_name = self.llm_connection_combo.currentData()
+        
+        # Check if LLM connection is enabled
+        llm_connections = self.config_manager.get_llm_connections()
+        llm_config = llm_connections.get(llm_connection_name, {})
+        if not llm_config.get('enabled', True):
+            QMessageBox.warning(
+                self,
+                "LLM Connection Disabled",
+                f"The selected LLM connection '{llm_connection_name}' is disabled.\n\n"
+                "Please enable it in the Connections tab or select a different LLM connection."
+            )
             return
         
         # Disable UI during processing
@@ -252,22 +322,24 @@ class QueryChatTab(QWidget):
         llm_connection = self.llm_connection_combo.currentData()
         viz_type = self.viz_framework_combo.currentText()
         
-        # Get database type from connection config
+        # Get database type from connection config using new type/sub-type system
         connections = self.config_manager.get_connections()
-        db_config = {}
-        if isinstance(connections, dict):
-            # If connections is a dict of connection dicts
-            db_config = connections.get(db_connection, {})
-        elif isinstance(connections, list):
-            # If connections is a list of dicts
-            db_config = next((c for c in connections if c.get('name') == db_connection), {})
-        database_type = db_config.get('database_type', 'mysql')
+        db_config = connections.get(db_connection, {})
+        
+        # Use sub_type for database type, with fallback detection
+        database_type = db_config.get('sub_type', 'mysql')
+        if database_type == 'unknown' or not database_type:
+            # Fallback: detect from port for legacy connections
+            port = db_config.get('port', 3306)
+            port_map = {3306: 'mysql', 27017: 'mongodb', 5432: 'postgres', 1521: 'oracle'}
+            database_type = port_map.get(port, 'mysql')
         
         # Create query request
         query_request = QueryRequest(
             database_name=db_connection,
             question=query_text,
-            database_type=database_type
+            database_type=database_type,
+            llm_provider=llm_connection
         )
         
         # Start query execution in background thread
@@ -381,3 +453,137 @@ class QueryChatTab(QWidget):
             
         except Exception as e:
             self.logger.error(f"Failed to refresh LLM client: {e}")
+
+    def refresh_connections(self):
+        """Refresh connections dropdown (called when connections are updated in other tabs)"""
+        self.load_connections()
+
+    def validate_connection_setup(self) -> tuple[bool, str]:
+        """Validate that required connections are properly configured"""
+        # Check database connections
+        all_connections = self.config_manager.get_connections()
+        db_connections = [conn for conn in all_connections.values() if conn.get('type') == 'DB']
+        if not db_connections:
+            return False, "No database connections configured. Please create a database connection in the Connections tab."
+        
+        # Check LLM connections
+        llm_connections = self.config_manager.get_llm_connections()
+        enabled_llm_connections = {name: conn for name, conn in llm_connections.items() if conn.get('enabled', True)}
+        
+        if not enabled_llm_connections:
+            if llm_connections:
+                return False, "No enabled LLM connections available. Please enable at least one LLM connection in the Connections tab."
+            else:
+                return False, "No LLM connections configured. Please create an LLM connection in the Connections tab."
+        
+        return True, "Connections are properly configured"
+
+    def show_connection_help(self):
+        """Show help dialog for setting up connections"""
+        is_valid, message = self.validate_connection_setup()
+        
+        if not is_valid:
+            help_text = f"""<h3>Connection Setup Required</h3>
+            <p><b>Issue:</b> {message}</p>
+            
+            <h4>To set up connections:</h4>
+            <ol>
+                <li>Go to the <b>Connections</b> tab</li>
+                <li>Click <b>+ New Database Connection</b> to add a database (MySQL, MongoDB, PostgreSQL)</li>
+                <li>Click <b>+ New LLM Connection</b> to add an AI provider (OpenAI, GitHub Copilot, Ollama)</li>
+                <li>Test your connections to ensure they work</li>
+                <li>Return to this tab and refresh connections</li>
+            </ol>
+            
+            <h4>Supported Connection Types:</h4>
+            <ul>
+                <li><b>Database:</b> MySQL, MongoDB, PostgreSQL</li>
+                <li><b>LLM:</b> OpenAI API, GitHub Copilot, Local Ollama</li>
+            </ul>"""
+            
+            QMessageBox.information(self, "Connection Setup Help", help_text)
+        else:
+            QMessageBox.information(self, "Connection Status", "✓ All connections are properly configured!")
+
+    def on_db_connection_changed(self, connection_text: str):
+        """Handle database connection selection change"""
+        if not connection_text or connection_text == "Select database connection!":
+            self.db_status_label.setText("No database selected")
+            self.db_status_label.setStyleSheet("color: gray; font-size: 10px;")
+            return
+        
+        # Get connection name from combo data
+        connection_name = self.db_connection_combo.currentData()
+        if not connection_name:
+            return
+            
+        try:
+            # Get connection info using new type/sub-type system
+            connections = self.config_manager.get_connections()
+            connection = connections.get(connection_name, {})
+            
+            if connection and connection.get('type') == 'DB':
+                sub_type = connection.get('sub_type', 'unknown')
+                host = connection.get('host', 'unknown')
+                port = connection.get('port', 'unknown')
+                database = connection.get('database', connection.get('service_name', 'unknown'))
+                
+                status_text = f"Type: {sub_type.upper()} | Host: {host}:{port} | DB: {database}"
+                self.db_status_label.setText(status_text)
+                self.db_status_label.setStyleSheet("color: blue; font-size: 10px;")
+            else:
+                self.db_status_label.setText("Connection not found")
+                self.db_status_label.setStyleSheet("color: red; font-size: 10px;")
+                
+        except Exception as e:
+            self.logger.error(f"Error getting DB connection info: {e}")
+            self.db_status_label.setText("Error getting connection info")
+            self.db_status_label.setStyleSheet("color: red; font-size: 10px;")
+
+    def on_llm_connection_changed(self, connection_text: str):
+        """Handle LLM connection selection change"""
+        if not connection_text or connection_text == "Select LLM connection!":
+            self.llm_status_label.setText("No LLM selected")
+            self.llm_status_label.setStyleSheet("color: gray; font-size: 10px;")
+            return
+        
+        # Get connection name from combo data
+        connection_name = self.llm_connection_combo.currentData()
+        if not connection_name:
+            return
+            
+        try:
+            # Get connection info using new type/sub-type system
+            llm_connections = self.config_manager.get_llm_connections()
+            connection = llm_connections.get(connection_name, {})
+            
+            if connection:
+                sub_type = connection.get('sub_type', 'unknown')
+                model = connection.get('model', 'unknown')
+                enabled = connection.get('enabled', True)
+                
+                if sub_type == 'ollama':
+                    host = connection.get('host', 'localhost')
+                    port = connection.get('port', 11434)
+                    status_text = f"Type: {sub_type.upper()} | Model: {model} | Host: {host}:{port}"
+                elif sub_type in ['openai', 'github']:
+                    base_url = connection.get('base_url', 'default')
+                    status_text = f"Type: {sub_type.upper()} | Model: {model} | API: {base_url}"
+                else:
+                    status_text = f"Type: {sub_type.upper()} | Model: {model}"
+                
+                if not enabled:
+                    status_text += " | DISABLED"
+                    self.llm_status_label.setStyleSheet("color: orange; font-size: 10px;")
+                else:
+                    self.llm_status_label.setStyleSheet("color: green; font-size: 10px;")
+                    
+                self.llm_status_label.setText(status_text)
+            else:
+                self.llm_status_label.setText("Connection not found")
+                self.llm_status_label.setStyleSheet("color: red; font-size: 10px;")
+                
+        except Exception as e:
+            self.logger.error(f"Error getting LLM connection info: {e}")
+            self.llm_status_label.setText("Error getting connection info")
+            self.llm_status_label.setStyleSheet("color: red; font-size: 10px;")

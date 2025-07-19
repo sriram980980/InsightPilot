@@ -239,6 +239,10 @@ class ConnectionsTab(QWidget):
                     "Connection Updated",
                     f"Connection '{connection_name}' has been updated successfully."
                 )
+                
+                # Notify parent window of connection changes
+                if self.parent() and hasattr(self.parent(), 'on_connections_changed'):
+                    self.parent().on_connections_changed()
     
     def delete_connection(self):
         """Handle delete connection button click"""
@@ -255,6 +259,10 @@ class ConnectionsTab(QWidget):
                 # Remove from config and refresh table
                 self.config_manager.remove_connection(connection_name)
                 self.load_connections()
+                
+                # Notify parent window of connection changes
+                if self.parent() and hasattr(self.parent(), 'on_connections_changed'):
+                    self.parent().on_connections_changed()
     
     def test_connection(self):
         """Handle test connection button click"""
@@ -279,7 +287,10 @@ class ConnectionsTab(QWidget):
                 if connection_type == 'LLM':
                     # Import here to avoid circular imports
                     from ..dialogs.llm_connection_dialog import LLMTestThread
-                    self.test_thread = LLMTestThread(config)
+                    
+                    # Extract provider type from config
+                    provider_type = config.get('provider', 'ollama')
+                    self.test_thread = LLMTestThread(config, provider_type)
                 else:
                     self.test_thread = ConnectionTestThread(config)
                 
@@ -398,3 +409,7 @@ class ConnectionsTab(QWidget):
                 "Connection Saved",
                 "LLM connection has been saved successfully."
             )
+            
+            # Notify parent window of connection changes
+            if self.parent() and hasattr(self.parent(), 'on_connections_changed'):
+                self.parent().on_connections_changed()

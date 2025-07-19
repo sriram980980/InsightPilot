@@ -362,6 +362,14 @@ class MySQLAdapter(BaseDBAdapter):
             if pattern in query_upper:
                 return False
         
+        # Check for invalid LIMIT clause patterns
+        import re
+        # Check for LIMIT with expressions (multiplication, subqueries, etc.)
+        limit_pattern = r'LIMIT\s+[^0-9\s]|LIMIT\s+\d+\s*[*+\-/]|LIMIT\s+\([^)]*SELECT'
+        if re.search(limit_pattern, query_upper, re.IGNORECASE):
+            self.logger.warning(f"Invalid LIMIT clause detected in query: {query}")
+            return False
+        
         return True
     
     def get_table_sample(self, table_name: str, limit: int = 100) -> QueryResult:

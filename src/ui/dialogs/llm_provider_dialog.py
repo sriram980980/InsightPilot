@@ -181,23 +181,24 @@ class LLMProviderDialog(QDialog):
     
     def load_providers(self):
         """Load existing providers from configuration"""
-        providers = self.config_manager.get_llm_providers()
-        llm_settings = self.config_manager.get_llm_settings()
+        # Use LLM connections instead of deprecated llm_providers
+        connections = self.config_manager.get_llm_connections()
+        default_connection = self.config_manager.get_default_llm_connection()
         
         self.provider_list.clear()
         self.default_provider_combo.clear()
         
-        for name, config in providers.items():
-            item = QListWidgetItem(name)
-            if not config.get("enabled", True):
-                item.setForeground(Qt.gray)
-            self.provider_list.addItem(item)
-            self.default_provider_combo.addItem(name)
+        for name, config in connections.items():
+            if config.get("type") == "LLM":  # Only show LLM connections
+                item = QListWidgetItem(name)
+                if not config.get("enabled", True):
+                    item.setForeground(Qt.gray)
+                self.provider_list.addItem(item)
+                self.default_provider_combo.addItem(name)
         
         # Set default provider
-        default_provider = llm_settings.get("default_provider", "")
-        if default_provider:
-            index = self.default_provider_combo.findText(default_provider)
+        if default_connection:
+            index = self.default_provider_combo.findText(default_connection)
             if index >= 0:
                 self.default_provider_combo.setCurrentIndex(index)
     
@@ -213,10 +214,10 @@ class LLMProviderDialog(QDialog):
         
         # Load provider configuration
         provider_name = current.text()
-        providers = self.config_manager.get_llm_providers()
+        connections = self.config_manager.get_llm_connections()
         
-        if provider_name in providers:
-            config = providers[provider_name]
+        if provider_name in connections:
+            config = connections[provider_name]
             self.load_provider_config(config)
     
     def load_provider_config(self, config: Dict[str, Any]):
@@ -258,8 +259,8 @@ class LLMProviderDialog(QDialog):
         name, ok = QInputDialog.getText(self, "Add Provider", "Provider name:")
         if ok and name:
             # Check if name already exists
-            providers = self.config_manager.get_llm_providers()
-            if name in providers:
+            connections = self.config_manager.get_llm_connections()
+            if name in connections:
                 QMessageBox.warning(self, "Error", f"Provider '{name}' already exists!")
                 return
             

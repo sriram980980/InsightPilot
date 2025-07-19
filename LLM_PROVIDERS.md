@@ -26,13 +26,14 @@ InsightPilot now supports multiple LLM providers including Ollama (local), OpenA
 
 ### Using the UI
 
-1. **Open Provider Management**
-   - Go to `Tools` → `LLM Providers`
-   - The LLM Provider Configuration dialog will open
+1. **Open Connection Management**
+   - Go to the `Connections` tab
+   - Click "Add Connection" button
+   - Select "LLM" as the connection type
 
-2. **Add a Provider**
-   - Click "Add" in the provider list
-   - Enter a name for your provider
+2. **Add an LLM Provider**
+   - Click "Add Connection" in the connections tab
+   - Enter a name for your LLM connection
    - Configure the provider settings:
      - **Provider Type**: Select from ollama, openai, or github_copilot
      - **Model**: Specify the model name

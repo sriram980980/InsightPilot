@@ -31,9 +31,10 @@ class EnhancedLLMClient:
         # Initialize providers
         for provider_name, config in provider_configs.items():
             try:
+                self.logger.info(f"Creating provider '{provider_name}' with config: provider={config.provider}, model={config.model}")
                 provider = self._create_provider(config)
                 self.providers[provider_name] = provider
-                self.logger.info(f"Initialized {provider_name} provider")
+                self.logger.info(f"Initialized {provider_name} provider (class: {provider.__class__.__name__})")
             except Exception as e:
                 self.logger.error(f"Failed to initialize {provider_name} provider: {e}")
     

@@ -108,13 +108,6 @@ class MainWindow(QMainWindow):
         # Tools menu
         tools_menu = menubar.addMenu("&Tools")
         
-        # LLM Providers submenu
-        llm_providers_action = QAction("LLM &Providers", self)
-        llm_providers_action.triggered.connect(self.show_llm_providers)
-        tools_menu.addAction(llm_providers_action)
-        
-        tools_menu.addSeparator()
-        
         settings_action = QAction("&Settings", self)
         settings_action.triggered.connect(self.show_settings)
         tools_menu.addAction(settings_action)
@@ -213,39 +206,22 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'connections_tab'):
                 self.connections_tab.refresh_connections()
             
+            # Notify other tabs of connection changes
+            self.on_connections_changed()
+            
             QMessageBox.information(
                 self,
                 "Connection Saved",
                 "Database connection has been saved successfully."
             )
     
-    def show_llm_providers(self):
-        """Show LLM provider configuration dialog"""
-        try:
-            from .dialogs import LLMProviderDialog
-            
-            dialog = LLMProviderDialog(self.config_manager, self)
-            dialog.providers_changed.connect(self.on_providers_changed)
-            
-            if dialog.exec() == QDialog.Accepted:
-                QMessageBox.information(
-                    self,
-                    "Providers Updated",
-                    "LLM provider configuration has been updated successfully."
-                )
-        except Exception as e:
-            self.logger.error(f"Failed to open LLM provider dialog: {e}")
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"Failed to open LLM provider configuration: {str(e)}"
-            )
-    
-    def on_providers_changed(self):
-        """Handle LLM provider configuration changes"""
-        # Refresh any tabs that depend on LLM configuration
+    def on_connections_changed(self):
+        """Handle connection configuration changes"""
+        # Refresh any tabs that depend on connection configuration
         if hasattr(self, 'query_chat_tab'):
-            self.query_chat_tab.refresh_llm_client()
+            self.query_chat_tab.refresh_connections()
+        if hasattr(self, 'connections_tab'):
+            self.connections_tab.refresh_connections()
     
     def show_settings(self):
         """Show settings dialog"""

@@ -10,6 +10,7 @@
 |----------|-------------|-------------|
 | Cannot connect to database | Check credentials & network | [Database Connection Issues](#database-connection-issues) |
 | Query generation fails | Verify LLM service running | [LLM Service Issues](#llm-service-issues) |
+| SQL syntax errors | Check LIMIT clause format | [SQL Syntax Errors](#problem-sql-syntax-errors-in-generated-queries) |
 | Charts not displaying | Check data format & chart type | [Visualization Issues](#visualization-issues) |
 | Slow performance | Limit result size & optimize queries | [Performance Issues](#performance-issues) |
 | Installation problems | Check Python version & dependencies | [Installation Issues](#installation-issues) |
@@ -259,6 +260,52 @@ ollama pull codellama:7b-code         # Code-optimized
 Instead of: "Show me a comprehensive analysis of sales performance across all regions with year-over-year comparison"
 Try: "Show me sales by region this year vs last year"
 ```
+
+### Problem: "SQL syntax errors in generated queries"
+
+#### Symptoms
+- MySQL error 1064: "You have an error in your SQL syntax"
+- Errors mentioning invalid LIMIT clause syntax
+- Queries with expressions like `LIMIT 2 * (SELECT COUNT(...))`
+
+#### Common Causes
+- LLM generating invalid LIMIT expressions
+- Using mathematical operations in LIMIT clauses
+- Subqueries in LIMIT clauses (not supported in MySQL)
+
+#### Solutions
+
+##### ✅ **Enhanced Query Validation**
+The system now automatically validates and rejects queries with invalid LIMIT syntax:
+```sql
+# ❌ Invalid (will be rejected)
+SELECT * FROM users LIMIT 2 * (SELECT COUNT(*) FROM departments)
+SELECT * FROM users LIMIT (SELECT MAX(id) FROM settings)
+SELECT * FROM users LIMIT 10 + 5
+
+# ✅ Valid (will be accepted)
+SELECT * FROM users LIMIT 100
+SELECT * FROM users LIMIT 1000
+```
+
+##### ✅ **Improved LLM Prompts**
+The system uses enhanced prompts that specifically instruct the LLM to:
+- Use only literal numbers in LIMIT clauses
+- Avoid mathematical expressions in LIMIT
+- Follow MySQL-specific syntax rules
+
+##### ✅ **Automatic Query Retry**
+When a syntax error is detected, the system:
+1. Logs the error for analysis
+2. Creates an improved prompt with specific error context
+3. Attempts to regenerate a corrected query
+4. Validates the new query before execution
+
+##### ✅ **Manual Query Review**
+If automatic retry fails, you can:
+1. Check the query in the "Generated Query" tab
+2. Manually edit the LIMIT clause to use a literal number
+3. Re-run the corrected query
 
 ---
 

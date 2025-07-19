@@ -588,9 +588,11 @@ connections = config_manager.get_database_connections()
 config_manager.add_database_connection("prod_db", connection_info)
 config_manager.remove_database_connection("old_db")
 
-# LLM settings
-llm_settings = config_manager.get_llm_settings()
-config_manager.update_llm_settings({"model": "gpt-4", "temperature": 0.1})
+# LLM connections
+llm_connections = config_manager.get_llm_connections()
+config_manager.add_llm_connection("my_llm", connection_config)
+config_manager.set_default_llm_connection("my_llm")
+default_llm = config_manager.get_default_llm_connection()
 
 # UI preferences
 ui_settings = config_manager.get_ui_settings()
@@ -602,24 +604,54 @@ config_manager.update_ui_settings({"theme": "dark", "font_size": 12})
 ```python
 config_structure = {
     "database_connections": {
-        "connection_name": {
-            "type": "mysql|oracle|mongodb",
+        "prod_mysql": {
+            "type": "DB",
+            "sub_type": "mysql",
             "host": "server_address",
             "port": 3306,
             "database": "database_name",
             "username": "user",
             "password": "encrypted_password",
             "extra_params": {}
+        },
+        "mongo_cluster": {
+            "type": "DB",
+            "sub_type": "mongodb",
+            "host": "server_address", 
+            "port": 27017,
+            "database": "database_name",
+            "username": "user",
+            "password": "encrypted_password",
+            "extra_params": {}
         }
     },
-    "llm_settings": {
-        "provider": "ollama|openai|custom",
-        "model": "model_name",
-        "base_url": "http://localhost:11434",
-        "api_key": "encrypted_key",
-        "timeout": 30,
-        "temperature": 0.1
+    "llm_connections": {
+        "my_github_copilot": {
+            "type": "LLM",
+            "sub_type": "github",
+            "model": "gpt-4o",
+            "token": "encrypted_token",
+            "base_url": "https://models.inference.ai.azure.com",
+            "enabled": True
+        },
+        "local_ollama": {
+            "type": "LLM", 
+            "sub_type": "ollama",
+            "model": "mistral:7b",
+            "host": "localhost",
+            "port": 11434,
+            "enabled": True
+        },
+        "openai_api": {
+            "type": "LLM",
+            "sub_type": "openai", 
+            "model": "gpt-4",
+            "api_key": "encrypted_api_key",
+            "base_url": "https://api.openai.com/v1",
+            "enabled": True
+        }
     },
+    "default_llm_connection": "my_github_copilot",
     "ui_settings": {
         "theme": "light|dark|auto",
         "font_size": 11,
@@ -627,6 +659,32 @@ config_structure = {
         "show_animations": True
     }
 }
+```
+
+### Connection Types and Sub-Types
+
+InsightPilot uses a structured approach to connection management with types and sub-types:
+
+#### Database Connections (type: "DB")
+- **mysql**: MySQL/MariaDB databases
+- **mongodb**: MongoDB databases  
+- **postgres**: PostgreSQL databases (future)
+
+#### LLM Connections (type: "LLM")
+- **openai**: OpenAI API (GPT models)
+- **github**: GitHub Copilot API
+- **ollama**: Local Ollama server
+
+The connection sub-type determines which provider class will be instantiated:
+
+```python
+# Get provider class name based on connection sub-type
+provider_class = config_manager.get_provider_class_name("my_connection")
+# Returns: "GitHubCopilotProvider", "OpenAIProvider", "MySQLAdapter", etc.
+
+# Get module path for dynamic imports
+module_path = config_manager.get_provider_module_path("my_connection") 
+# Returns: "llm.providers.github_copilot_provider", etc.
 ```
 
 ### Secure Storage

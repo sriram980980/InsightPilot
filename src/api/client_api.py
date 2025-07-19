@@ -22,6 +22,7 @@ class QueryRequest:
     database_name: str
     question: str
     database_type: str = "mysql"  # mysql, oracle, mongodb
+    llm_provider: Optional[str] = None  # LLM provider name to use for this query
 
 
 @dataclass
@@ -62,54 +63,84 @@ class ClientAPI:
     
     def get_database_connections(self) -> Dict[str, Any]:
         """Get available database connections"""
-        return {
-            name: {
-                "host": conn.host,
-                "port": conn.port,
-                "database": conn.database,
-                "type": self._detect_db_type(conn.port)
-            }
-            for name, conn in self.config_manager.get_database_connections().items()
-        }
+        connections = {}
+        all_connections = self.config_manager.get_connections()
+        
+        for name, conn in all_connections.items():
+            if conn.get('type') == 'DB':
+                # Use sub_type if available, otherwise detect from port
+                db_type = conn.get("sub_type", self._detect_db_type(conn.get("port", 3306)))
+                
+                connections[name] = {
+                    "host": conn.get("host", ""),
+                    "port": conn.get("port", 3306),
+                    "database": conn.get("database", ""),
+                    "type": db_type
+                }
+        return connections
     
     def _detect_db_type(self, port: int) -> str:
-        """Detect database type from port"""
+        """Detect database type from port (fallback method)"""
         if port == 3306:
             return "mysql"
         elif port == 1521:
             return "oracle"
         elif port == 27017:
             return "mongodb"
+        elif port == 5432:
+            return "postgres"
         else:
             return "unknown"
     
     def connect_to_database(self, database_name: str) -> bool:
-        """Connect to a specific database"""
+        """Connect to a specific database using sub_type"""
         try:
-            connections = self.config_manager.get_database_connections()
+            all_connections = self.config_manager.get_connections()
             
-            if database_name not in connections:
+            if database_name not in all_connections:
                 self.logger.error(f"Database connection not found: {database_name}")
                 return False
             
-            connection = connections[database_name]
-            db_type = self._detect_db_type(connection.port)
+            connection = all_connections[database_name]
             
-            # Create appropriate adapter
+            # Ensure it's a DB connection
+            if connection.get('type') != 'DB':
+                self.logger.error(f"Connection '{database_name}' is not a database connection")
+                return False
+            
+            # Use sub_type if available, otherwise fallback to port detection
+            db_type = connection.get("sub_type", self._detect_db_type(connection.get("port", 3306)))
+            
+            # Create DBConnection object for adapters
+            from adapters.base_adapter import DBConnection
+            db_connection = DBConnection(
+                host=connection.get("host", "localhost"),
+                port=connection.get("port", 3306),
+                database=connection.get("database", ""),
+                username=connection.get("username", ""),
+                password=connection.get("password", ""),
+                connection_params=connection.get("connection_params")
+            )
+            
+            # Create appropriate adapter based on sub_type
             if db_type == "mysql":
-                adapter = MySQLAdapter(connection)
+                adapter = MySQLAdapter(db_connection)
             elif db_type == "oracle":
-                adapter = OracleAdapter(connection)
+                adapter = OracleAdapter(db_connection)
             elif db_type == "mongodb":
-                adapter = MongoAdapter(connection)
+                adapter = MongoAdapter(db_connection)
+            elif db_type == "postgres":
+                # Note: PostgreSQLAdapter needs to be implemented
+                self.logger.error(f"PostgreSQL adapter not yet implemented for {database_name}")
+                return False
             else:
-                self.logger.error(f"Unsupported database type for {database_name}")
+                self.logger.error(f"Unsupported database type '{db_type}' for {database_name}")
                 return False
             
             # Test connection
             if adapter.connect():
                 self.adapters[database_name] = adapter
-                self.logger.info(f"Connected to database: {database_name}")
+                self.logger.info(f"Connected to database: {database_name} (type: {db_type})")
                 return True
             else:
                 self.logger.error(f"Failed to connect to database: {database_name}")
@@ -165,6 +196,57 @@ class ClientAPI:
             self.logger.error(f"Error getting schema for {database_name}: {e}")
             raise
     
+    def _resolve_llm_provider_name(self, llm_connection_name: str) -> str:
+        """Resolve LLM connection name to actual provider name using sub_type"""
+        if not llm_connection_name:
+            return None
+            
+        try:
+            # Get LLM connections from config
+            llm_connections = self.config_manager.get_llm_connections()
+            
+            if llm_connection_name not in llm_connections:
+                self.logger.warning(f"LLM connection '{llm_connection_name}' not found in configuration")
+                return None
+            
+            connection = llm_connections[llm_connection_name]
+            
+            # Check if connection is enabled
+            if not connection.get("enabled", True):
+                self.logger.warning(f"LLM connection '{llm_connection_name}' is disabled")
+                return None
+            
+            # Verify connection type and sub_type
+            if connection.get("type", "").upper() != "LLM":
+                self.logger.warning(f"Connection '{llm_connection_name}' is not an LLM connection")
+                return None
+            
+            sub_type = connection.get("sub_type", "").lower()
+            if not sub_type:
+                self.logger.warning(f"LLM connection '{llm_connection_name}' missing sub_type")
+                return None
+            
+            # Validate sub_type
+            valid_subtypes = ["openai", "github", "ollama"]
+            if sub_type not in valid_subtypes:
+                self.logger.error(f"Invalid LLM sub_type '{sub_type}' for connection '{llm_connection_name}'. Must be one of: {valid_subtypes}")
+                return None
+            
+            # Check if provider exists in enhanced client
+            if hasattr(self.llm_client, 'providers') and llm_connection_name in self.llm_client.providers:
+                self.logger.info(f"LLM connection '{llm_connection_name}' (sub_type: {sub_type}) found in providers")
+                return llm_connection_name
+            else:
+                self.logger.warning(f"LLM connection '{llm_connection_name}' not found in enhanced client providers {self.llm_client.providers}")
+                if hasattr(self.llm_client, 'providers'):
+                    available_providers = list(self.llm_client.providers.keys())
+                    self.logger.info(f"Available providers: {available_providers}")
+                return None
+            
+        except Exception as e:
+            self.logger.error(f"Error resolving LLM connection '{llm_connection_name}': {e}")
+            return None
+    
     def execute_natural_language_query(self, request: QueryRequest) -> QueryResponse:
         """Execute a natural language query"""
         return self.execute_natural_language_query_with_progress(request)
@@ -199,7 +281,7 @@ class ClientAPI:
                     )
             
             adapter = self.adapters[request.database_name]
-            report_progress("✅ Connected! Scanning database schema!")
+            report_progress("Connected! Scanning database schema!")
             
             # Get schema information with progress reporting
             try:
@@ -219,7 +301,7 @@ class ClientAPI:
                 for table in schema:
                     report_table(table.name)
                 
-                report_progress(f"📊 Schema analysis complete! Found {len(schema)} tables")
+                report_progress(f"Schema analysis complete! Found {len(schema)} tables")
                 
                 schema_info = self.prompt_builder.format_schema_info(schema)
                 self.logger.info(f"Retrieved schema for {request.database_name}: {len(schema)} tables")
@@ -235,16 +317,42 @@ class ClientAPI:
                     execution_time=time.time() - start_time
                 )
             
-            # Generate SQL using LLM with proper prompt
+            # Generate SQL using LLM with proper prompt and optional provider selection
             try:
-                report_progress("🤖 AI is analyzing your question!")
+                report_progress("AI is analyzing your question!")
+                
+                # Use specific LLM provider if requested, resolving the provider name
+                provider_name = None
+                
+                if hasattr(request, 'llm_provider') and request.llm_provider:
+                    provider_name = self._resolve_llm_provider_name(request.llm_provider)
+                    
+                    if not provider_name:
+                        return QueryResponse(
+                            success=False,
+                            sql_query="",
+                            result=None,
+                            explanation="",
+                            error=f"LLM connection '{request.llm_provider}' not available. Please check your LLM connections in the Connections tab.",
+                            execution_time=time.time() - start_time
+                        )
                 
                 if request.database_type == "mongodb":
-                    report_progress("🧠 Generating MongoDB aggregation query!")
-                    llm_response = self.llm_client.generate_mongodb_query(schema_info, request.question)
+                    report_progress("Generating MongoDB aggregation query!")
+                    if hasattr(self.llm_client, 'generate_mongodb_query'):
+                        # Enhanced client with provider support
+                        llm_response = self.llm_client.generate_mongodb_query(schema_info, request.question, provider_name)
+                    else:
+                        # Legacy client
+                        llm_response = self.llm_client.generate_mongodb_query(schema_info, request.question)
                 else:
-                    report_progress("🧠 Crafting SQL query for your request!")
-                    llm_response = self.llm_client.generate_sql(schema_info, request.question)
+                    report_progress("Crafting SQL query for your request!")
+                    if hasattr(self.llm_client, 'generate_sql') and hasattr(self.llm_client, 'providers'):
+                        # Enhanced client with provider support
+                        llm_response = self.llm_client.generate_sql(schema_info, request.question, provider_name)
+                    else:
+                        # Legacy client
+                        llm_response = self.llm_client.generate_sql(schema_info, request.question)
                 
                 if not llm_response.success:
                     return QueryResponse(
@@ -261,8 +369,8 @@ class ClientAPI:
                 # Clean up the generated query
                 generated_query = self._clean_generated_query(generated_query)
                 
-                report_progress(f"✨ Query generated successfully!")
-                report_progress(f"📝 Generated Query: {generated_query[:100]}{'...' if len(generated_query) > 100 else ''}")
+                report_progress(f"Query generated successfully!")
+                report_progress(f"Generated Query: {generated_query[:100]}{'...' if len(generated_query) > 100 else ''}")
                 
                 self.logger.info(f"Generated SQL query: {generated_query}")
                 
@@ -279,9 +387,9 @@ class ClientAPI:
             
             # Validate and sanitize the query
             try:
-                report_progress("🔒 Validating query for security!")
+                report_progress("Validating query for security!")
                 sanitized_query = adapter.sanitize_query(generated_query)
-                report_progress("✅ Query validation passed!")
+                report_progress("Query validation passed!")
             except ValueError as validation_error:
                 self.logger.error(f"Query validation failed: {validation_error}")
                 return QueryResponse(
@@ -299,24 +407,31 @@ class ClientAPI:
             
             while retry_count <= max_retries:
                 try:
-                    report_progress("⚡ Executing query against database!")
+                    report_progress("Executing query against database!")
                     query_result = adapter.execute_query(sanitized_query)
                     
                     if query_result.error:
                         # Check if this is a MySQL error that we can fix with a retry
                         if retry_count < max_retries and self._should_retry_query(query_result.error):
-                            report_progress(f"⚠️ Query issue detected, AI is creating an improved version (attempt {retry_count + 2}/{max_retries + 1})!")
+                            report_progress(f"Query issue detected, AI is creating an improved version (attempt {retry_count + 2}/{max_retries + 1})!")
                             
-                            # Generate a new query with improved prompt
+                            # Generate a new query with improved prompt using selected provider
                             retry_prompt = self._create_retry_prompt(schema_info, request.question, query_result.error, generated_query)
-                            retry_response = self.llm_client.generate_sql_custom_prompt(retry_prompt)
+                            
+                            # Use the same provider for retry as original request
+                            if hasattr(self.llm_client, 'generate_sql_custom_prompt') and hasattr(self.llm_client, 'providers'):
+                                # Enhanced client with provider support
+                                retry_response = self.llm_client.generate_sql_custom_prompt(retry_prompt, provider_name)
+                            else:
+                                # Legacy client
+                                retry_response = self.llm_client.generate_sql_custom_prompt(retry_prompt)
                             
                             if retry_response.success:
                                 retry_query = self._clean_generated_query(retry_response.content.strip())
                                 try:
                                     sanitized_query = adapter.sanitize_query(retry_query)
                                     generated_query = retry_query  # Update the generated query for final response
-                                    report_progress(f"🔄 Improved query: {retry_query[:100]}{'...' if len(retry_query) > 100 else ''}")
+                                    report_progress(f"Improved query: {retry_query[:100]}{'...' if len(retry_query) > 100 else ''}")
                                     retry_count += 1
                                     continue  # Try again with the new query
                                 except ValueError:
@@ -332,7 +447,7 @@ class ClientAPI:
                         )
                     
                     # Success - break out of retry loop
-                    report_progress(f"🎉 Query executed successfully! Found {query_result.row_count} rows in {query_result.execution_time:.2f}s")
+                    report_progress(f"Query executed successfully! Found {query_result.row_count} rows in {query_result.execution_time:.2f}s")
                     break
                     
                 except Exception as exec_error:
@@ -348,10 +463,10 @@ class ClientAPI:
             
             # Generate explanation
             try:
-                report_progress("📖 AI is preparing an explanation!")
+                report_progress("AI is preparing an explanation!")
                 explanation_response = self.llm_client.explain_query(sanitized_query)
                 explanation = explanation_response.content if explanation_response.success else "Query explanation not available"
-                report_progress("✅ Analysis complete!")
+                report_progress("Analysis complete!")
             except Exception as explain_error:
                 self.logger.warning(f"Failed to generate explanation: {explain_error}")
                 explanation = "Query explanation not available"
@@ -432,9 +547,8 @@ class ClientAPI:
     def update_llm_model(self, model_name: str) -> bool:
         """Update LLM model"""
         success = self.llm_client.update_model(model_name)
-        if success:
-            # Update configuration
-            self.config_manager.update_llm_settings({"model": model_name})
+        # Note: In connection-based architecture, model updates should be done 
+        # directly on the specific connection configuration
         return success
     
     def _should_retry_query(self, error_message: str) -> bool:
@@ -473,7 +587,7 @@ class ClientAPI:
 ### RULES ###
 1. Only generate SELECT queries
 2. Use proper MySQL syntax
-3. Include LIMIT clause (max 1000 rows)
+3. Include LIMIT clause (max 1000 rows) - MUST be a literal number, not an expression
 4. Use table aliases for better readability
 5. Ensure all columns in SELECT are either in GROUP BY or are aggregate functions
 6. Include only the query result, no additional text or explanations or alternative queries, the query should work as it is with no further modifications
